@@ -55,7 +55,7 @@ router.post("/register", async (req, res) => {
   res.status(201).json({ token, user: toAuthUser(user) });
 });
 
-// POST /api/auth/login — accepts 8-digit friend token (id) + password
+// POST /api/auth/login — accepts username + password
 router.post("/login", async (req, res) => {
   const { id, password } = req.body;
   if (!id || !password || typeof id !== "string" || typeof password !== "string") {
@@ -63,7 +63,7 @@ router.post("/login", async (req, res) => {
     return;
   }
 
-  const [user] = await db.select().from(usersTable).where(eq(usersTable.friendToken, id.trim())).limit(1);
+  const [user] = await db.select().from(usersTable).where(eq(usersTable.username, id.trim())).limit(1);
   if (!user) {
     res.status(401).json({ error: "Invalid credentials" });
     return;

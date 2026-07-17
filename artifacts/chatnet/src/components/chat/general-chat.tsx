@@ -9,8 +9,11 @@ import {
 import { useSocketStore } from "@/store/use-socket";
 import { useAuthContext } from "@/hooks/use-auth-context";
 import { ContextMenuOverlay } from "@/components/ui/context-menu-overlay";
+import { ImageLightbox } from "@/components/ui/image-lightbox";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
+
+const MAX_IMAGE_BYTES = 2 * 1024 * 1024; // 2 MB
 
 interface MsgCtxMenu {
   x: number;
@@ -20,7 +23,6 @@ interface MsgCtxMenu {
   senderToken: string | null;
 }
 
-// Detect image messages
 function isImageMsg(content: string) {
   return content.startsWith("__img__:");
 }
@@ -32,6 +34,7 @@ export function GeneralChat() {
   const { data: messages = [], isLoading } = useGetGeneralMessages();
   const { data: friends = [] } = useGetFriends();
   const [content, setContent] = useState("");
+  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -47,7 +50,6 @@ export function GeneralChat() {
   const typingState = useSocketStore(state => state.typingState);
 
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-
   const [ctxMenu, setCtxMenu] = useState<MsgCtxMenu | null>(null);
 
   useEffect(() => {
@@ -82,8 +84,13 @@ export function GeneralChat() {
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 300 * 1024) {
-      toast({ variant: "destructive", title: "Too large", description: "Image must be under 300 KB." });
+    if (!["image/jpeg", "image/png"].includes(file.type)) {
+      toast({ variant: "destructive", title: "Invalid type", description: "Only JPG and PNG files are supported." });
+      e.target.value = "";
+      return;
+    }
+    if (file.size > MAX_IMAGE_BYTES) {
+      toast({ variant: "destructive", title: "Too large", description: "Image must be under 2 MB." });
       e.target.value = "";
       return;
     }
@@ -109,7 +116,7 @@ export function GeneralChat() {
     senderLabel: string,
     senderToken: string | null,
   ) => {
-    if (senderId === user?.id) return; // no menu for yourself
+    if (senderId === user?.id) return;
     e.preventDefault();
     setCtxMenu({ x: e.clientX, y: e.clientY, senderId, senderLabel, senderToken });
   };
@@ -155,7 +162,7 @@ export function GeneralChat() {
                       className={`text-xs font-bold ${isMe ? "text-primary" : "text-foreground hover:text-primary"} ${!isMe ? "cursor-pointer" : ""}`}
                       onContextMenu={(e) => handleSenderContextMenu(e, msg.senderId, msg.senderLabel, (msg as { senderToken?: string | null }).senderToken ?? null)}
                     >
-                      {isMe ? "you" : msg.senderLabel}
+                      {isMe ? (user?.displayName ?? "you") : msg.senderLabel}
                     </span>
                     <span className="text-[10px] text-muted-foreground">
                       {format(new Date(msg.createdAt), "HH:mm")}
@@ -166,8 +173,10 @@ export function GeneralChat() {
                   <img
                     src={imgSrc(msg.content)}
                     alt="shared image"
-                    className="max-w-xs max-h-48 border border-border mt-0.5"
+                    className="max-w-[200px] sm:max-w-xs max-h-48 border border-border mt-0.5 cursor-pointer hover:opacity-80"
                     style={{ display: "block" }}
+                    onClick={() => setLightboxSrc(imgSrc(msg.content))}
+                    title="Click to view full size"
                   />
                 ) : (
                   <p className="text-sm text-foreground whitespace-pre-wrap break-words leading-snug pl-0">
@@ -192,15 +201,15 @@ export function GeneralChat() {
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
-            className="px-2 flex items-center text-muted-foreground font-mono text-sm border-r border-border hover:text-foreground"
-            title="Upload image (JPG/PNG, max 300 KB)"
+            className="px-2 flex items-center text-muted-foreground font-mono text-sm border-r border-border hover:text-foreground shrink-0"
+            title="Upload image (JPG/PNG, max 2 MB)"
           >
             {'>'}
           </button>
           <input
             ref={fileInputRef}
             type="file"
-            accept=".jpg,.jpeg,.png"
+            accept=".jpg,.jpeg,.png,image/jpeg,image/png"
             className="hidden"
             onChange={handleImageSelect}
           />
@@ -208,12 +217,12 @@ export function GeneralChat() {
             value={content}
             onChange={handleTyping}
             placeholder="type a message..."
-            className="flex-1 bg-transparent px-2 py-2 text-sm font-mono text-foreground outline-none placeholder:text-muted-foreground h-9"
+            className="flex-1 bg-transparent px-2 py-2 text-sm font-mono text-foreground outline-none placeholder:text-muted-foreground h-9 min-w-0"
           />
           <button
             type="submit"
             disabled={!content.trim()}
-            className="px-3 py-2 text-xs font-mono border-l border-border text-muted-foreground hover:text-foreground disabled:opacity-30"
+            className="px-3 py-2 text-xs font-mono border-l border-border text-muted-foreground hover:text-foreground disabled:opacity-30 shrink-0"
           >
             send
           </button>
@@ -256,6 +265,11 @@ export function GeneralChat() {
             ] : []),
           ]}
         />
+      )}
+
+      {/* Image lightbox */}
+      {lightboxSrc && (
+        <ImageLightbox src={lightboxSrc} onClose={() => setLightboxSrc(null)} />
       )}
     </div>
   );

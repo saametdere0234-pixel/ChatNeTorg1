@@ -144,13 +144,13 @@ export function Sidebar({ currentTab, onSelectTab }: SidebarProps) {
   return (
     <div className="w-52 flex flex-col h-full bg-card border-r border-border font-mono text-xs">
       {/* Logo */}
-      <div className="px-3 py-2 border-b border-border">
+      <div className="px-3 py-2 border-b border-border shrink-0">
         <span className="text-sm font-bold" style={{ color: 'var(--logo-chat)' }}>Chat</span>
         <span className="text-sm font-bold" style={{ color: 'var(--logo-net)' }}>Net</span>
       </div>
 
       {/* Identity / Profile */}
-      <div className="px-3 py-2 border-b border-border">
+      <div className="px-3 py-2 border-b border-border shrink-0">
         {/* Display name — click to rename */}
         {editingName ? (
           <input
@@ -168,7 +168,7 @@ export function Sidebar({ currentTab, onSelectTab }: SidebarProps) {
         ) : (
           <button
             onClick={startRename}
-            className="block text-foreground hover:text-primary font-bold text-xs mb-0.5 text-left"
+            className="block text-foreground hover:text-primary font-bold text-xs mb-0.5 text-left w-full truncate"
             title="Click to change name"
           >
             {user?.displayName ?? "..."}
@@ -176,7 +176,7 @@ export function Sidebar({ currentTab, onSelectTab }: SidebarProps) {
         )}
         {/* ID — only for registered users */}
         {user && !user.isGuest && (
-          <div className="text-muted-foreground">
+          <div className="text-muted-foreground truncate">
             id:{" "}
             <button onClick={handleCopyToken} className="text-foreground hover:text-primary">
               {user.friendToken}
@@ -189,7 +189,7 @@ export function Sidebar({ currentTab, onSelectTab }: SidebarProps) {
       </div>
 
       {/* Channels */}
-      <div className="px-3 py-2 border-b border-border">
+      <div className="px-3 py-2 border-b border-border shrink-0">
         <div className="text-muted-foreground mb-1">channels</div>
         <button
           onClick={() => onSelectTab("general")}
@@ -241,7 +241,7 @@ export function Sidebar({ currentTab, onSelectTab }: SidebarProps) {
               key={friend.id}
               onClick={() => onSelectTab(friend.id, friend.label)}
               onContextMenu={(e) => handleFriendContextMenu(e, friend.id, friend.label)}
-              className={`block w-full text-left px-1 py-0.5 ${
+              className={`block w-full text-left px-1 py-0.5 truncate ${
                 currentTab === friend.id ? "text-primary" : "text-foreground hover:text-primary"
               }`}
             >
@@ -255,7 +255,7 @@ export function Sidebar({ currentTab, onSelectTab }: SidebarProps) {
       </div>
 
       {/* Quiet Mode */}
-      <div className="px-3 py-2 border-b border-border">
+      <div className="px-3 py-2 border-b border-border shrink-0">
         <button
           onClick={toggleQuietMode}
           className={`text-xs ${quietMode ? "text-primary" : "text-muted-foreground hover:text-foreground"}`}
@@ -265,8 +265,8 @@ export function Sidebar({ currentTab, onSelectTab }: SidebarProps) {
         </button>
       </div>
 
-      {/* Logout */}
-      <div className="px-3 py-2 border-t border-border flex items-center h-9">
+      {/* Logout — same height as mobile top bar (h-9) for visual alignment */}
+      <div className="px-3 border-t border-border flex items-center h-9 shrink-0">
         {logoutConfirm ? (
           <span className="text-xs text-foreground">
             sure?{" "}

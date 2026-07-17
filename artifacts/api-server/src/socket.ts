@@ -65,8 +65,8 @@ export function initSocket(httpServer: HttpServer): SocketIOServer {
 
     socket.on("general-message", async (data: { content: string }) => {
       if (!data?.content?.trim()) return;
-      // Allow up to 500KB for images (base64)
-      const content = data.content.trim().slice(0, 524288);
+      // Allow up to 3MB for images (base64 of 2MB ≈ 2.7MB)
+      const content = data.content.trim().slice(0, 3145728);
       const id = generateId();
 
       await db.insert(generalMessagesTable).values({ id, senderId: userId, content });
@@ -122,8 +122,8 @@ export function initSocket(httpServer: HttpServer): SocketIOServer {
 
     socket.on("dm-message", async (data: { friendId: string; content: string }) => {
       if (!data?.friendId || !data?.content?.trim()) return;
-      // Allow up to 500KB for images (base64)
-      const content = data.content.trim().slice(0, 524288);
+      // Allow up to 3MB for images (base64 of 2MB ≈ 2.7MB)
+      const content = data.content.trim().slice(0, 3145728);
 
       const [friendship] = await db
         .select()

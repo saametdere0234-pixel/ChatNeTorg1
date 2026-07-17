@@ -15,7 +15,7 @@ const registerSchema = z.object({
 });
 
 const loginSchema = z.object({
-  id: z.string().min(1, "required"),
+  id: z.string().min(1, "required"), // 'id' field maps to username on the backend
   password: z.string().min(1, "required"),
 });
 
@@ -181,17 +181,12 @@ export default function AuthPage() {
 
             <form onSubmit={loginForm.handleSubmit(data => loginMutation.mutate({ data }))} className="space-y-2">
               <div>
-                <label className="text-xs text-muted-foreground block mb-0.5">
-                  your ID
-                  {savedFriendToken && (
-                    <span className="ml-1 text-primary">(saved)</span>
-                  )}
-                </label>
+                <label className="text-xs text-muted-foreground block mb-0.5">username</label>
                 <input
                   {...loginForm.register("id")}
                   autoComplete="username"
                   className="w-full bg-background border border-border px-2 py-1 text-sm text-foreground outline-none focus:border-primary placeholder:text-muted-foreground"
-                  placeholder="xx.xx.xx.xx"
+                  placeholder="your username"
                 />
                 {loginForm.formState.errors.id && (
                   <p className="text-xs text-destructive mt-0.5">{loginForm.formState.errors.id.message}</p>
