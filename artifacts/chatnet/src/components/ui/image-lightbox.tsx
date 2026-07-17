@@ -5,6 +5,13 @@ interface ImageLightboxProps {
   onClose: () => void;
 }
 
+function downloadImage(src: string) {
+  const a = document.createElement("a");
+  a.href = src;
+  a.download = `chatnet-image-${Date.now()}.jpg`;
+  a.click();
+}
+
 export function ImageLightbox({ src, onClose }: ImageLightboxProps) {
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
@@ -26,12 +33,20 @@ export function ImageLightbox({ src, onClose }: ImageLightboxProps) {
         {/* Header */}
         <div className="w-full flex items-center justify-between px-2 py-1 bg-card border-b border-border font-mono text-xs">
           <span className="text-muted-foreground">photo</span>
-          <button
-            onClick={onClose}
-            className="text-muted-foreground hover:text-foreground"
-          >
-            [close]
-          </button>
+          <div className="flex gap-3">
+            <button
+              onClick={() => downloadImage(src)}
+              className="text-muted-foreground hover:text-foreground"
+            >
+              [download]
+            </button>
+            <button
+              onClick={onClose}
+              className="text-muted-foreground hover:text-foreground"
+            >
+              [close]
+            </button>
+          </div>
         </div>
         <img
           src={src}

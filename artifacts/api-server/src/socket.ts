@@ -220,6 +220,35 @@ export function initSocket(httpServer: HttpServer): SocketIOServer {
       emitStopTyping(socket, data.room, userId, io);
     });
 
+    // ── Display name sync ─────────────────────────────────────────────
+    socket.on("update-display-name", async (data: { displayName: string }) => {
+      if (!data?.displayName?.trim()) return;
+      // Re-read the user from DB to get the authoritative current label
+      const [user] = await db.select().from(usersTable).where(eq(usersTable.id, userId)).limit(1);
+      if (!user) return;
+      const newLabel = user.isGuest ? user.anonLabel : user.username;
+      // Update the in-memory auth for this socket so future messages use the new name
+      (socket as unknown as { _auth: AuthSocket })._auth.displayLabel = newLabel;
+
+      // Tell everyone in general + all friends so their UI updates immediately
+      io.to("general").emit("display-name-changed", { userId, newLabel });
+
+      // Find all friendships and notify each friend's personal room
+      const friendships = await db
+        .select()
+        .from(friendshipsTable)
+        .where(
+          or(
+            eq(friendshipsTable.user1Id, userId),
+            eq(friendshipsTable.user2Id, userId),
+          ),
+        );
+      for (const fs of friendships) {
+        const friendId = fs.user1Id === userId ? fs.user2Id : fs.user1Id;
+        io.to(`user:${friendId}`).emit("display-name-changed", { userId, newLabel });
+      }
+    });
+
     // ── User presence room ────────────────────────────────────────────
     socket.join(`user:${userId}`);
 

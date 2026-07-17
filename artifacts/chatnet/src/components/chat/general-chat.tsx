@@ -23,11 +23,24 @@ interface MsgCtxMenu {
   senderToken: string | null;
 }
 
+interface ImgCtxMenu {
+  x: number;
+  y: number;
+  src: string;
+}
+
 function isImageMsg(content: string) {
   return content.startsWith("__img__:");
 }
 function imgSrc(content: string) {
   return content.slice("__img__:".length);
+}
+
+function downloadImage(src: string) {
+  const a = document.createElement("a");
+  a.href = src;
+  a.download = `chatnet-image-${Date.now()}.jpg`;
+  a.click();
 }
 
 export function GeneralChat() {
@@ -48,9 +61,11 @@ export function GeneralChat() {
   const emitTyping = useSocketStore(state => state.emitTyping);
   const emitStopTyping = useSocketStore(state => state.emitStopTyping);
   const typingState = useSocketStore(state => state.typingState);
+  const userLabels = useSocketStore(state => state.userLabels);
 
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const [ctxMenu, setCtxMenu] = useState<MsgCtxMenu | null>(null);
+  const [imgCtxMenu, setImgCtxMenu] = useState<ImgCtxMenu | null>(null);
 
   useEffect(() => {
     joinGeneral();
@@ -121,6 +136,11 @@ export function GeneralChat() {
     setCtxMenu({ x: e.clientX, y: e.clientY, senderId, senderLabel, senderToken });
   };
 
+  const handleImageContextMenu = (e: React.MouseEvent, src: string) => {
+    e.preventDefault();
+    setImgCtxMenu({ x: e.clientX, y: e.clientY, src });
+  };
+
   const handleAddFromCtx = (token: string, label: string) => {
     addFriend({ token }).then((newFriend) => {
       queryClient.invalidateQueries({ queryKey: getGetFriendsQueryKey() });
@@ -153,6 +173,10 @@ export function GeneralChat() {
             const isMe = msg.senderId === user?.id;
             const prevMsg = messages[index - 1];
             const showHeader = !prevMsg || prevMsg.senderId !== msg.senderId;
+            // Use live label from socket store if available (catches renames without page reload)
+            const liveLabel = isMe
+              ? (user?.displayName ?? "you")
+              : (userLabels[msg.senderId] ?? msg.senderLabel);
 
             return (
               <div key={msg.id} className={showHeader && index > 0 ? "mt-3" : "mt-0"}>
@@ -160,9 +184,9 @@ export function GeneralChat() {
                   <div className="flex items-baseline gap-2 mb-0.5">
                     <span
                       className={`text-xs font-bold ${isMe ? "text-primary" : "text-foreground hover:text-primary"} ${!isMe ? "cursor-pointer" : ""}`}
-                      onContextMenu={(e) => handleSenderContextMenu(e, msg.senderId, msg.senderLabel, (msg as { senderToken?: string | null }).senderToken ?? null)}
+                      onContextMenu={(e) => handleSenderContextMenu(e, msg.senderId, liveLabel, (msg as { senderToken?: string | null }).senderToken ?? null)}
                     >
-                      {isMe ? (user?.displayName ?? "you") : msg.senderLabel}
+                      {liveLabel}
                     </span>
                     <span className="text-[10px] text-muted-foreground">
                       {format(new Date(msg.createdAt), "HH:mm")}
@@ -176,7 +200,8 @@ export function GeneralChat() {
                     className="max-w-[200px] sm:max-w-xs max-h-48 border border-border mt-0.5 cursor-pointer hover:opacity-80"
                     style={{ display: "block" }}
                     onClick={() => setLightboxSrc(imgSrc(msg.content))}
-                    title="Click to view full size"
+                    onContextMenu={(e) => handleImageContextMenu(e, imgSrc(msg.content))}
+                    title="Click to view · Right-click to download"
                   />
                 ) : (
                   <p className="text-sm text-foreground whitespace-pre-wrap break-words leading-snug pl-0">
@@ -263,6 +288,25 @@ export function GeneralChat() {
                 onClick: () => {},
               },
             ] : []),
+          ]}
+        />
+      )}
+
+      {/* Right-click context menu for images */}
+      {imgCtxMenu && (
+        <ContextMenuOverlay
+          x={imgCtxMenu.x}
+          y={imgCtxMenu.y}
+          onClose={() => setImgCtxMenu(null)}
+          items={[
+            {
+              label: "Download image",
+              onClick: () => downloadImage(imgCtxMenu.src),
+            },
+            {
+              label: "View full size",
+              onClick: () => setLightboxSrc(imgCtxMenu.src),
+            },
           ]}
         />
       )}

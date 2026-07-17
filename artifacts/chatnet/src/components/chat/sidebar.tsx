@@ -9,6 +9,7 @@ import {
   getGetMeQueryKey,
 } from "@workspace/api-client-react";
 import { useAuthStore } from "@/store/use-auth";
+import { useSocketStore } from "@/store/use-socket";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
@@ -29,6 +30,11 @@ interface CtxMenu {
 export function Sidebar({ currentTab, onSelectTab }: SidebarProps) {
   const { user } = useAuthContext();
   const setToken = useAuthStore(state => state.setToken);
+  const storageEnabled = useAuthStore(state => state.storageEnabled);
+  const setStorageEnabled = useAuthStore(state => state.setStorageEnabled);
+  const clearAllData = useAuthStore(state => state.clearAllData);
+  const emitNameUpdate = useSocketStore(state => state.emitNameUpdate);
+  const userLabels = useSocketStore(state => state.userLabels);
   const [_, setLocation] = useLocation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -48,6 +54,9 @@ export function Sidebar({ currentTab, onSelectTab }: SidebarProps) {
 
   // Logout confirm
   const [logoutConfirm, setLogoutConfirm] = useState(false);
+
+  // Clear data confirm
+  const [clearConfirm, setClearConfirm] = useState(false);
 
   // Quiet mode is on user object
   const quietMode = user?.quietMode ?? false;
@@ -77,9 +86,12 @@ export function Sidebar({ currentTab, onSelectTab }: SidebarProps) {
     updateMeMutation.mutate(
       { data: { displayName: trimmed } },
       {
-        onSuccess: () => {
+        onSuccess: (updated) => {
           queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() });
           setEditingName(false);
+          // Sync new name over socket so live messages update immediately
+          const newLabel = updated.displayName ?? trimmed;
+          emitNameUpdate(newLabel);
         },
         onError: (err: unknown) => {
           const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
@@ -113,6 +125,16 @@ export function Sidebar({ currentTab, onSelectTab }: SidebarProps) {
         onSuccess: () => queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() }),
       }
     );
+  };
+
+  const toggleStorage = () => {
+    setStorageEnabled(!storageEnabled);
+  };
+
+  const handleClearData = () => {
+    clearAllData();
+    setClearConfirm(false);
+    setLocation("/auth");
   };
 
   const handleRemoveFriend = (friendId: string, friendLabel: string) => {
@@ -236,22 +258,53 @@ export function Sidebar({ currentTab, onSelectTab }: SidebarProps) {
         {friends.length === 0 ? (
           <div className="text-muted-foreground">none</div>
         ) : (
-          friends.map((friend) => (
-            <button
-              key={friend.id}
-              onClick={() => onSelectTab(friend.id, friend.label)}
-              onContextMenu={(e) => handleFriendContextMenu(e, friend.id, friend.label)}
-              className={`block w-full text-left px-1 py-0.5 truncate ${
-                currentTab === friend.id ? "text-primary" : "text-foreground hover:text-primary"
-              }`}
-            >
-              {friend.label}
-              {friend.unreadCount && friend.unreadCount > 0 ? (
-                <span className="ml-1 text-primary">[{friend.unreadCount}]</span>
-              ) : null}
-            </button>
-          ))
+          friends.map((friend) => {
+            // Use live label from socket if available (catches renames)
+            const liveLabel = userLabels[friend.id] ?? friend.label;
+            return (
+              <button
+                key={friend.id}
+                onClick={() => onSelectTab(friend.id, liveLabel)}
+                onContextMenu={(e) => handleFriendContextMenu(e, friend.id, liveLabel)}
+                className={`block w-full text-left px-1 py-0.5 truncate ${
+                  currentTab === friend.id ? "text-primary" : "text-foreground hover:text-primary"
+                }`}
+              >
+                {liveLabel}
+                {friend.unreadCount && friend.unreadCount > 0 ? (
+                  <span className="ml-1 text-primary">[{friend.unreadCount}]</span>
+                ) : null}
+              </button>
+            );
+          })
         )}
+      </div>
+
+      {/* Storage toggle */}
+      <div className="px-3 py-2 border-b border-border shrink-0">
+        <button
+          onClick={toggleStorage}
+          className={`text-xs ${storageEnabled ? "text-primary" : "text-muted-foreground hover:text-foreground"}`}
+        >
+          {storageEnabled ? "[storage: on]" : "[storage: off]"}
+        </button>
+        <div className="mt-1">
+          {clearConfirm ? (
+            <span className="text-xs text-foreground">
+              clear all?{" "}
+              <button onClick={handleClearData} className="text-destructive hover:underline">yes</button>
+              {" / "}
+              <button onClick={() => setClearConfirm(false)} className="text-muted-foreground hover:text-foreground">no</button>
+            </span>
+          ) : (
+            <button
+              onClick={() => setClearConfirm(true)}
+              className="text-xs text-muted-foreground hover:text-destructive"
+            >
+              [clear data]
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Quiet Mode */}

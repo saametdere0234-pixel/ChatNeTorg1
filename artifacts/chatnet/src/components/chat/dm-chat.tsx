@@ -6,6 +6,7 @@ import { useAuthContext } from "@/hooks/use-auth-context";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { ImageLightbox } from "@/components/ui/image-lightbox";
+import { ContextMenuOverlay } from "@/components/ui/context-menu-overlay";
 
 const MAX_IMAGE_BYTES = 2 * 1024 * 1024; // 2 MB
 
@@ -14,11 +15,24 @@ interface DmChatProps {
   friendLabel: string;
 }
 
+interface ImgCtxMenu {
+  x: number;
+  y: number;
+  src: string;
+}
+
 function isImageMsg(content: string) {
   return content.startsWith("__img__:");
 }
 function imgSrc(content: string) {
   return content.slice("__img__:".length);
+}
+
+function downloadImage(src: string) {
+  const a = document.createElement("a");
+  a.href = src;
+  a.download = `chatnet-image-${Date.now()}.jpg`;
+  a.click();
 }
 
 export function DmChat({ friendId, friendLabel }: DmChatProps) {
@@ -34,6 +48,7 @@ export function DmChat({ friendId, friendLabel }: DmChatProps) {
 
   const [content, setContent] = useState("");
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
+  const [imgCtxMenu, setImgCtxMenu] = useState<ImgCtxMenu | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -45,6 +60,7 @@ export function DmChat({ friendId, friendLabel }: DmChatProps) {
   const emitStopTyping = useSocketStore(state => state.emitStopTyping);
   const emitDmSeen = useSocketStore(state => state.emitDmSeen);
   const typingState = useSocketStore(state => state.typingState);
+  const userLabels = useSocketStore(state => state.userLabels);
 
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
@@ -114,7 +130,14 @@ export function DmChat({ friendId, friendLabel }: DmChatProps) {
     e.target.value = "";
   };
 
+  const handleImageContextMenu = (e: React.MouseEvent, src: string) => {
+    e.preventDefault();
+    setImgCtxMenu({ x: e.clientX, y: e.clientY, src });
+  };
+
   const isFriendTyping = Object.keys(typingState[friendId] || {}).length > 0;
+  // Use live label from socket store if the friend has renamed
+  const liveFriendLabel = userLabels[friendId] ?? friendLabel;
 
   if (!friendId) return null;
 
@@ -122,7 +145,7 @@ export function DmChat({ friendId, friendLabel }: DmChatProps) {
     <div className="flex flex-col h-full bg-background">
       {/* DM header */}
       <div className="px-3 py-1.5 border-b border-border bg-card flex items-center justify-between">
-        <span className="text-xs font-mono text-foreground">{friendLabel}</span>
+        <span className="text-xs font-mono text-foreground">{liveFriendLabel}</span>
         <span className="text-xs font-mono text-muted-foreground">private</span>
       </div>
 
@@ -145,7 +168,7 @@ export function DmChat({ friendId, friendLabel }: DmChatProps) {
                 {showHeader && (
                   <div className="flex items-baseline gap-2 mb-0.5">
                     <span className={`text-xs font-bold ${msg.fromMe ? "text-primary" : "text-foreground"}`}>
-                      {msg.fromMe ? (user?.displayName ?? "you") : friendLabel}
+                      {msg.fromMe ? (user?.displayName ?? "you") : liveFriendLabel}
                     </span>
                     <span className="text-[10px] text-muted-foreground">
                       {format(new Date(msg.createdAt), "HH:mm")}
@@ -164,7 +187,8 @@ export function DmChat({ friendId, friendLabel }: DmChatProps) {
                     className="max-w-[200px] sm:max-w-xs max-h-48 border border-border mt-0.5 cursor-pointer hover:opacity-80"
                     style={{ display: "block" }}
                     onClick={() => setLightboxSrc(imgSrc(msg.content))}
-                    title="Click to view full size"
+                    onContextMenu={(e) => handleImageContextMenu(e, imgSrc(msg.content))}
+                    title="Click to view · Right-click to download"
                   />
                 ) : (
                   <p className="text-sm text-foreground whitespace-pre-wrap break-words leading-snug">
@@ -181,7 +205,7 @@ export function DmChat({ friendId, friendLabel }: DmChatProps) {
       <div className="border-t border-border bg-card">
         {isFriendTyping && (
           <div className="px-3 pt-1 text-[10px] text-muted-foreground font-mono">
-            {friendLabel} is typing...
+            {liveFriendLabel} is typing...
           </div>
         )}
         <form onSubmit={handleSend} className="flex gap-0 h-9">
@@ -216,6 +240,25 @@ export function DmChat({ friendId, friendLabel }: DmChatProps) {
           </button>
         </form>
       </div>
+
+      {/* Right-click context menu for images */}
+      {imgCtxMenu && (
+        <ContextMenuOverlay
+          x={imgCtxMenu.x}
+          y={imgCtxMenu.y}
+          onClose={() => setImgCtxMenu(null)}
+          items={[
+            {
+              label: "Download image",
+              onClick: () => downloadImage(imgCtxMenu.src),
+            },
+            {
+              label: "View full size",
+              onClick: () => setLightboxSrc(imgCtxMenu.src),
+            },
+          ]}
+        />
+      )}
 
       {/* Image lightbox */}
       {lightboxSrc && (

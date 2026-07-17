@@ -10,6 +10,7 @@ interface SocketStore {
   socket: Socket | null;
   isConnected: boolean;
   typingState: TypingState;
+  userLabels: Record<string, string>; // userId -> latest known display label
   connect: (token: string) => void;
   disconnect: () => void;
   joinGeneral: () => void;
@@ -21,12 +22,15 @@ interface SocketStore {
   emitTyping: (room: 'general' | string) => void;
   emitStopTyping: (room: 'general' | string) => void;
   emitDmSeen: (friendId: string) => void;
+  emitNameUpdate: (displayName: string) => void;
 }
 
 export const useSocketStore = create<SocketStore>((set, get) => ({
   socket: null,
   isConnected: false,
   typingState: {},
+  userLabels: {},
+
   connect: (token: string) => {
     const currentSocket = get().socket;
     if (currentSocket) return;
@@ -69,15 +73,24 @@ export const useSocketStore = create<SocketStore>((set, get) => ({
       });
     });
 
+    // Track live display name changes from other users
+    socket.on('display-name-changed', ({ userId, newLabel }: { userId: string; newLabel: string }) => {
+      set((state) => ({
+        userLabels: { ...state.userLabels, [userId]: newLabel },
+      }));
+    });
+
     set({ socket });
   },
+
   disconnect: () => {
     const { socket } = get();
     if (socket) {
       socket.disconnect();
-      set({ socket: null, isConnected: false, typingState: {} });
+      set({ socket: null, isConnected: false, typingState: {}, userLabels: {} });
     }
   },
+
   joinGeneral: () => get().socket?.emit('join-general'),
   leaveGeneral: () => get().socket?.emit('leave-general'),
   sendGeneralMessage: (content: string) => get().socket?.emit('general-message', { content }),
@@ -87,4 +100,5 @@ export const useSocketStore = create<SocketStore>((set, get) => ({
   emitTyping: (room: 'general' | string) => get().socket?.emit('typing', { room }),
   emitStopTyping: (room: 'general' | string) => get().socket?.emit('stop-typing', { room }),
   emitDmSeen: (friendId: string) => get().socket?.emit('dm-seen', { friendId }),
+  emitNameUpdate: (displayName: string) => get().socket?.emit('update-display-name', { displayName }),
 }));
