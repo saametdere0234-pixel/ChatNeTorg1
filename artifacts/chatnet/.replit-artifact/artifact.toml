@@ -1,0 +1,27 @@
+kind = "web"
+previewPath = "/"
+title = "ChatNet"
+version = "1.0.0"
+id = "artifacts/chatnet"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 18700
+
+[services.development]
+run = "pnpm --filter @workspace/chatnet run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/chatnet", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/chatnet/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "18700"
+BASE_PATH = "/"

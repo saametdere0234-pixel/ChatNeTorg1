@@ -3,20 +3,25 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: ChatNet API specification
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: auth
+    description: Authentication
+  - name: general
+    description: General chat (whole server)
+  - name: friends
+    description: Friend management and DM chat
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,6 +29,170 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /auth/register:
+    post:
+      operationId: register
+      tags: [auth]
+      summary: Register a new account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterInput"
+      responses:
+        "201":
+          description: Registered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "409":
+          description: Username already taken
+
+  /auth/login:
+    post:
+      operationId: login
+      tags: [auth]
+      summary: Login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginInput"
+      responses:
+        "200":
+          description: Logged in
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "401":
+          description: Invalid credentials
+
+  /auth/me:
+    get:
+      operationId: getMe
+      tags: [auth]
+      summary: Get current user
+      responses:
+        "200":
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthUser"
+        "401":
+          description: Not authenticated
+
+  /general/messages:
+    get:
+      operationId: getGeneralMessages
+      tags: [general]
+      summary: Get general chat messages (paginated)
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: before
+          in: query
+          schema:
+            type: ["string", "null"]
+          description: Message ID to paginate before
+      responses:
+        "200":
+          description: List of messages
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/GeneralMessage"
+
+  /friends:
+    get:
+      operationId: getFriends
+      tags: [friends]
+      summary: Get friend list
+      responses:
+        "200":
+          description: Friend list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Friend"
+
+  /friends/add:
+    post:
+      operationId: addFriend
+      tags: [friends]
+      summary: Add a friend by 8-digit token (xx.xx.xx.xx)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddFriendInput"
+      responses:
+        "201":
+          description: Friend added
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Friend"
+        "400":
+          description: Invalid token or already friends
+        "404":
+          description: Token not found
+
+  /friends/{friendId}/messages:
+    get:
+      operationId: getFriendMessages
+      tags: [friends]
+      summary: Get DM messages with a friend (last 50)
+      parameters:
+        - name: friendId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: DM messages
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DirectMessage"
+        "403":
+          description: Not friends
+
+  /friends/{friendId}/seen:
+    post:
+      operationId: markSeen
+      tags: [friends]
+      summary: Mark all DMs from a friend as seen
+      parameters:
+        - name: friendId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Marked seen
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SeenResult"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +203,113 @@ components:
       required:
         - status
 
+    RegisterInput:
+      type: object
+      required: [username, password]
+      properties:
+        username:
+          type: string
+          minLength: 3
+          maxLength: 30
+          pattern: "^[a-zA-Z0-9_]+$"
+        password:
+          type: string
+          minLength: 6
+
+    LoginInput:
+      type: object
+      required: [username, password]
+      properties:
+        username:
+          type: string
+        password:
+          type: string
+
+    AuthResponse:
+      type: object
+      required: [token, user]
+      properties:
+        token:
+          type: string
+        user:
+          $ref: "#/components/schemas/AuthUser"
+
+    AuthUser:
+      type: object
+      required: [id, username, friendToken]
+      properties:
+        id:
+          type: string
+        username:
+          type: string
+        friendToken:
+          type: string
+          description: "8-digit token in xx.xx.xx.xx format"
+
+    GeneralMessage:
+      type: object
+      required: [id, content, senderId, senderLabel, createdAt, seenByMe]
+      properties:
+        id:
+          type: string
+        content:
+          type: string
+        senderId:
+          type: string
+        senderLabel:
+          type: string
+          description: "Anonymous label like Anon#1234"
+        createdAt:
+          type: string
+          format: date-time
+        seenByMe:
+          type: boolean
+
+    DirectMessage:
+      type: object
+      required: [id, content, senderId, fromMe, createdAt]
+      properties:
+        id:
+          type: string
+        content:
+          type: string
+        senderId:
+          type: string
+        fromMe:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        seenAt:
+          type: ["string", "null"]
+          format: date-time
+
+    Friend:
+      type: object
+      required: [id, label, createdAt]
+      properties:
+        id:
+          type: string
+        label:
+          type: string
+          description: "Anonymous label like Anon#5678"
+        createdAt:
+          type: string
+          format: date-time
+        unreadCount:
+          type: integer
+
+    AddFriendInput:
+      type: object
+      required: [token]
+      properties:
+        token:
+          type: string
+          description: "8-digit token in xx.xx.xx.xx format"
+
+    SeenResult:
+      type: object
+      required: [markedCount]
+      properties:
+        markedCount:
+          type: integer
