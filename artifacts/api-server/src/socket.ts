@@ -8,7 +8,7 @@ import {
   friendshipsTable,
   directMessagesTable,
 } from "@workspace/db/schema";
-import { eq, and, or, isNull } from "drizzle-orm";
+import { eq, and, or, isNull, inArray } from "drizzle-orm";
 import { verifyToken } from "./lib/auth.js";
 import { generateId } from "./lib/ids.js";
 import { logger } from "./lib/logger.js";
@@ -82,6 +82,30 @@ export function initSocket(httpServer: HttpServer): SocketIOServer {
       };
 
       io.to("general").emit("new-general-message", msg);
+    });
+
+    socket.on("delete-general-message", async (data: { messageId: string }) => {
+      if (!data?.messageId) return;
+      const [msg] = await db
+        .select({ id: generalMessagesTable.id })
+        .from(generalMessagesTable)
+        .where(and(eq(generalMessagesTable.id, data.messageId), eq(generalMessagesTable.senderId, userId)))
+        .limit(1);
+      if (!msg) return;
+      await db.delete(generalMessagesTable).where(eq(generalMessagesTable.id, data.messageId));
+      io.to("general").emit("general-message-deleted", { messageId: data.messageId });
+    });
+
+    socket.on("delete-general-messages", async (data: { messageIds: string[] }) => {
+      if (!data?.messageIds?.length) return;
+      const msgs = await db
+        .select({ id: generalMessagesTable.id })
+        .from(generalMessagesTable)
+        .where(and(inArray(generalMessagesTable.id, data.messageIds), eq(generalMessagesTable.senderId, userId)));
+      const validIds = msgs.map(m => m.id);
+      if (!validIds.length) return;
+      await db.delete(generalMessagesTable).where(inArray(generalMessagesTable.id, validIds));
+      io.to("general").emit("general-messages-deleted", { messageIds: validIds });
     });
 
     socket.on("seen-general", async (data: { messageId: string }) => {

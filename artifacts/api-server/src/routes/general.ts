@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
 import { generalMessagesTable, generalMessageSeenTable, usersTable } from "@workspace/db/schema";
-import { eq, desc, lt, and, inArray } from "drizzle-orm";
+import { eq, desc, lt, gte, and, inArray } from "drizzle-orm";
 import { requireAuth } from "../lib/auth.js";
 
 const router = Router();
@@ -11,7 +11,18 @@ router.get("/messages", requireAuth, async (req, res) => {
   const limit = Math.min(Number(req.query["limit"] ?? 50), 100);
   const before = req.query["before"] as string | undefined;
 
-  const conditions = before ? [lt(generalMessagesTable.id, before)] : [];
+  // Fetch the requesting user's registration time so new users only see
+  // messages sent after they joined
+  const [me] = await db
+    .select({ createdAt: usersTable.createdAt })
+    .from(usersTable)
+    .where(eq(usersTable.id, req.userId!))
+    .limit(1);
+
+  const conditions = [
+    gte(generalMessagesTable.createdAt, me!.createdAt),
+    ...(before ? [lt(generalMessagesTable.id, before)] : []),
+  ];
 
   const messages = await db
     .select({
@@ -26,7 +37,7 @@ router.get("/messages", requireAuth, async (req, res) => {
     })
     .from(generalMessagesTable)
     .innerJoin(usersTable, eq(generalMessagesTable.senderId, usersTable.id))
-    .where(conditions.length ? and(...conditions) : undefined)
+    .where(and(...conditions))
     .orderBy(desc(generalMessagesTable.createdAt))
     .limit(limit);
 

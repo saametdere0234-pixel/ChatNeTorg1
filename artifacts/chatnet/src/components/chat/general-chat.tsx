@@ -15,18 +15,33 @@ import { useQueryClient } from "@tanstack/react-query";
 
 const MAX_IMAGE_BYTES = 2 * 1024 * 1024; // 2 MB
 
+interface BlockMessage {
+  id: string;
+  content: string;
+}
+
 interface MsgCtxMenu {
   x: number;
   y: number;
   senderId: string;
   senderLabel: string;
   senderToken: string | null;
+  isOwn: boolean;
+  blockMessages: BlockMessage[];
+  topMessageId: string;
 }
 
 interface ImgCtxMenu {
   x: number;
   y: number;
   src: string;
+}
+
+// Sub-picker for "Pick a message in block"
+interface BlockPickerMenu {
+  x: number;
+  y: number;
+  messages: BlockMessage[];
 }
 
 function isImageMsg(content: string) {
@@ -41,6 +56,11 @@ function downloadImage(src: string) {
   a.href = src;
   a.download = `chatnet-image-${Date.now()}.jpg`;
   a.click();
+}
+
+function truncate(text: string, max = 40) {
+  if (isImageMsg(text)) return "[image]";
+  return text.length > max ? text.slice(0, max) + "…" : text;
 }
 
 export function GeneralChat() {
@@ -58,6 +78,8 @@ export function GeneralChat() {
   const joinGeneral = useSocketStore(state => state.joinGeneral);
   const leaveGeneral = useSocketStore(state => state.leaveGeneral);
   const sendGeneralMessage = useSocketStore(state => state.sendGeneralMessage);
+  const deleteGeneralMessage = useSocketStore(state => state.deleteGeneralMessage);
+  const deleteGeneralMessages = useSocketStore(state => state.deleteGeneralMessages);
   const emitTyping = useSocketStore(state => state.emitTyping);
   const emitStopTyping = useSocketStore(state => state.emitStopTyping);
   const typingState = useSocketStore(state => state.typingState);
@@ -66,6 +88,7 @@ export function GeneralChat() {
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const [ctxMenu, setCtxMenu] = useState<MsgCtxMenu | null>(null);
   const [imgCtxMenu, setImgCtxMenu] = useState<ImgCtxMenu | null>(null);
+  const [blockPicker, setBlockPicker] = useState<BlockPickerMenu | null>(null);
 
   useEffect(() => {
     joinGeneral();
@@ -125,15 +148,30 @@ export function GeneralChat() {
 
   const friendIds = new Set(friends.map(f => f.id));
 
+  // Compute the block (consecutive messages from same sender) starting at index
+  const getBlock = (startIndex: number): BlockMessage[] => {
+    const senderId = messages[startIndex]?.senderId;
+    if (!senderId) return [];
+    const block: BlockMessage[] = [];
+    for (let i = startIndex; i < messages.length; i++) {
+      if (messages[i].senderId !== senderId) break;
+      block.push({ id: messages[i].id, content: messages[i].content });
+    }
+    return block;
+  };
+
   const handleSenderContextMenu = (
     e: React.MouseEvent,
+    index: number,
     senderId: string,
     senderLabel: string,
     senderToken: string | null,
   ) => {
-    if (senderId === user?.id) return;
     e.preventDefault();
-    setCtxMenu({ x: e.clientX, y: e.clientY, senderId, senderLabel, senderToken });
+    const isOwn = senderId === user?.id;
+    const blockMessages = isOwn ? getBlock(index) : [];
+    const topMessageId = messages[index]?.id ?? "";
+    setCtxMenu({ x: e.clientX, y: e.clientY, senderId, senderLabel, senderToken, isOwn, blockMessages, topMessageId });
   };
 
   const handleImageContextMenu = (e: React.MouseEvent, src: string) => {
@@ -173,7 +211,6 @@ export function GeneralChat() {
             const isMe = msg.senderId === user?.id;
             const prevMsg = messages[index - 1];
             const showHeader = !prevMsg || prevMsg.senderId !== msg.senderId;
-            // Use live label from socket store if available (catches renames without page reload)
             const liveLabel = isMe
               ? (user?.displayName ?? "you")
               : (userLabels[msg.senderId] ?? msg.senderLabel);
@@ -183,8 +220,8 @@ export function GeneralChat() {
                 {showHeader && (
                   <div className="flex items-baseline gap-2 mb-0.5">
                     <span
-                      className={`text-xs font-bold ${isMe ? "text-primary" : "text-foreground hover:text-primary"} ${!isMe ? "cursor-pointer" : ""}`}
-                      onContextMenu={(e) => handleSenderContextMenu(e, msg.senderId, liveLabel, (msg as { senderToken?: string | null }).senderToken ?? null)}
+                      className={`text-xs font-bold ${isMe ? "text-primary cursor-pointer hover:text-primary/70" : "text-foreground hover:text-primary cursor-pointer"}`}
+                      onContextMenu={(e) => handleSenderContextMenu(e, index, msg.senderId, liveLabel, (msg as { senderToken?: string | null }).senderToken ?? null)}
                     >
                       {liveLabel}
                     </span>
@@ -254,13 +291,36 @@ export function GeneralChat() {
         </form>
       </div>
 
-      {/* Right-click context menu for message senders */}
+      {/* Right-click context menu */}
       {ctxMenu && (
         <ContextMenuOverlay
           x={ctxMenu.x}
           y={ctxMenu.y}
           onClose={() => setCtxMenu(null)}
-          items={[
+          items={ctxMenu.isOwn ? [
+            {
+              label: "Delete message",
+              danger: true,
+              onClick: () => {
+                deleteGeneralMessage(ctxMenu.topMessageId);
+              },
+            },
+            ...(ctxMenu.blockMessages.length > 1 ? [
+              {
+                label: "Delete all block",
+                danger: true,
+                onClick: () => {
+                  deleteGeneralMessages(ctxMenu.blockMessages.map(m => m.id));
+                },
+              },
+              {
+                label: "Pick a message in block",
+                onClick: () => {
+                  setBlockPicker({ x: ctxMenu.x + 160, y: ctxMenu.y, messages: ctxMenu.blockMessages });
+                },
+              },
+            ] : []),
+          ] : [
             ...(ctxMenu.senderToken ? [
               {
                 label: `ID: ${ctxMenu.senderToken}`,
@@ -292,6 +352,20 @@ export function GeneralChat() {
         />
       )}
 
+      {/* Block message picker overlay */}
+      {blockPicker && (
+        <BlockPickerOverlay
+          x={blockPicker.x}
+          y={blockPicker.y}
+          messages={blockPicker.messages}
+          onSelect={(id) => {
+            deleteGeneralMessage(id);
+            setBlockPicker(null);
+          }}
+          onClose={() => setBlockPicker(null)}
+        />
+      )}
+
       {/* Right-click context menu for images */}
       {imgCtxMenu && (
         <ContextMenuOverlay
@@ -315,6 +389,62 @@ export function GeneralChat() {
       {lightboxSrc && (
         <ImageLightbox src={lightboxSrc} onClose={() => setLightboxSrc(null)} />
       )}
+    </div>
+  );
+}
+
+function BlockPickerOverlay({
+  x,
+  y,
+  messages,
+  onSelect,
+  onClose,
+}: {
+  x: number;
+  y: number;
+  messages: BlockMessage[];
+  onSelect: (id: string) => void;
+  onClose: () => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        onClose();
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [onClose]);
+
+  const style: React.CSSProperties = {
+    position: "fixed",
+    left: Math.min(x, window.innerWidth - 220),
+    top: Math.min(y, window.innerHeight - messages.length * 30 - 40),
+    zIndex: 9999,
+    maxHeight: 280,
+    overflowY: "auto",
+  };
+
+  return (
+    <div
+      ref={ref}
+      style={style}
+      className="bg-card border border-border font-mono text-xs shadow-none min-w-[200px]"
+    >
+      <div className="px-3 py-1.5 text-[10px] text-muted-foreground border-b border-border">
+        pick message to delete
+      </div>
+      {messages.map((msg, i) => (
+        <button
+          key={msg.id}
+          onClick={() => onSelect(msg.id)}
+          className="block w-full text-left px-3 py-1.5 hover:bg-accent text-destructive"
+        >
+          {i + 1}. {truncate(msg.content)}
+        </button>
+      ))}
     </div>
   );
 }

@@ -52,11 +52,26 @@ export function useSocketEvents() {
       });
     };
 
+    const onGeneralMessageDeleted = ({ messageId }: { messageId: string }) => {
+      queryClient.setQueryData<GeneralMessage[]>(getGetGeneralMessagesQueryKey(), (old = []) =>
+        old.filter(m => m.id !== messageId),
+      );
+    };
+
+    const onGeneralMessagesDeleted = ({ messageIds }: { messageIds: string[] }) => {
+      const deleted = new Set(messageIds);
+      queryClient.setQueryData<GeneralMessage[]>(getGetGeneralMessagesQueryKey(), (old = []) =>
+        old.filter(m => !deleted.has(m.id)),
+      );
+    };
+
     socket.on('new-general-message', onNewGeneralMessage);
     socket.on('new-dm', onNewDm);
     socket.on('dm-notification', onDmNotification);
     socket.on('messages-seen', onMessagesSeen);
     socket.on('general-seen', onGeneralSeen);
+    socket.on('general-message-deleted', onGeneralMessageDeleted);
+    socket.on('general-messages-deleted', onGeneralMessagesDeleted);
 
     return () => {
       socket.off('new-general-message', onNewGeneralMessage);
@@ -64,6 +79,8 @@ export function useSocketEvents() {
       socket.off('dm-notification', onDmNotification);
       socket.off('messages-seen', onMessagesSeen);
       socket.off('general-seen', onGeneralSeen);
+      socket.off('general-message-deleted', onGeneralMessageDeleted);
+      socket.off('general-messages-deleted', onGeneralMessagesDeleted);
     };
   }, [socket, queryClient]);
 }

@@ -16,6 +16,8 @@ interface SocketStore {
   joinGeneral: () => void;
   leaveGeneral: () => void;
   sendGeneralMessage: (content: string) => void;
+  deleteGeneralMessage: (messageId: string) => void;
+  deleteGeneralMessages: (messageIds: string[]) => void;
   joinDm: (friendId: string) => void;
   leaveDm: (friendId: string) => void;
   sendDmMessage: (friendId: string, content: string) => void;
@@ -94,6 +96,8 @@ export const useSocketStore = create<SocketStore>((set, get) => ({
   joinGeneral: () => get().socket?.emit('join-general'),
   leaveGeneral: () => get().socket?.emit('leave-general'),
   sendGeneralMessage: (content: string) => get().socket?.emit('general-message', { content }),
+  deleteGeneralMessage: (messageId: string) => get().socket?.emit('delete-general-message', { messageId }),
+  deleteGeneralMessages: (messageIds: string[]) => get().socket?.emit('delete-general-messages', { messageIds }),
   joinDm: (friendId: string) => get().socket?.emit('join-dm', { friendId }),
   leaveDm: (friendId: string) => get().socket?.emit('leave-dm', { friendId }),
   sendDmMessage: (friendId: string, content: string) => get().socket?.emit('dm-message', { friendId, content }),
