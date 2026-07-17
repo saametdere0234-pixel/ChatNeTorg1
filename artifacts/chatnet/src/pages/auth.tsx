@@ -138,13 +138,13 @@ export default function AuthPage() {
           <div className="border border-border bg-card p-4">
             <button
               onClick={() => setMode("create")}
-              className="block w-full text-left px-2 py-1.5 text-sm text-foreground border border-border mb-2 hover:bg-accent"
+              className="block w-full text-left px-3 py-3 sm:py-1.5 text-sm text-foreground border border-border mb-2 hover:bg-accent"
             >
               [ Create Account ]
             </button>
             <button
               onClick={() => setMode("login")}
-              className="block w-full text-left px-2 py-1.5 text-sm text-foreground border border-border hover:bg-accent"
+              className="block w-full text-left px-3 py-3 sm:py-1.5 text-sm text-foreground border border-border hover:bg-accent"
             >
               [ Login ]
             </button>

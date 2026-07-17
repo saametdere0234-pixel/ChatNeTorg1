@@ -9,10 +9,22 @@ interface TypingState {
 interface SocketStore {
   socket: Socket | null;
   isConnected: boolean;
-  inGeneral: boolean; // tracks whether we are currently in the general room
+  inGeneral: boolean;
   typingState: TypingState;
-  userLabels: Record<string, string>; // userId -> latest known display label
+  userLabels: Record<string, string>;
   generalUserCount: number;
+
+  // ── General messages (source of truth for the general chat) ──────────────
+  // Managed here so real-time updates (socket events) always work regardless
+  // of whether the React Query fetch is enabled or not.
+  generalMessages: GeneralMessage[];
+  initGeneralMessages: (msgs: GeneralMessage[]) => void;
+  appendGeneralMessage: (msg: GeneralMessage) => void;
+  removeGeneralMessage: (id: string) => void;
+  removeGeneralMessages: (ids: string[]) => void;
+  patchGeneralMessage: (id: string, patch: Partial<GeneralMessage>) => void;
+
+  // ── Actions ───────────────────────────────────────────────────────────────
   connect: (token: string) => void;
   disconnect: () => void;
   joinGeneral: () => void;
@@ -37,13 +49,37 @@ export const useSocketStore = create<SocketStore>((set, get) => ({
   userLabels: {},
   generalUserCount: 0,
 
+  // General messages — always starts empty; populated by initGeneralMessages
+  // (called from GeneralChat on mount) and by real-time socket events.
+  generalMessages: [],
+
+  initGeneralMessages: (msgs) => set({ generalMessages: msgs }),
+
+  appendGeneralMessage: (msg) =>
+    set((s) => {
+      if (s.generalMessages.some((m) => m.id === msg.id)) return s; // deduplicate
+      return { generalMessages: [...s.generalMessages, msg] };
+    }),
+
+  removeGeneralMessage: (id) =>
+    set((s) => ({ generalMessages: s.generalMessages.filter((m) => m.id !== id) })),
+
+  removeGeneralMessages: (ids) => {
+    const deleted = new Set(ids);
+    set((s) => ({ generalMessages: s.generalMessages.filter((m) => !deleted.has(m.id)) }));
+  },
+
+  patchGeneralMessage: (id, patch) =>
+    set((s) => ({
+      generalMessages: s.generalMessages.map((m) => (m.id === id ? { ...m, ...patch } : m)),
+    })),
+
   connect: (token: string) => {
-    if (get().socket) return; // already connected — do not create a duplicate
+    if (get().socket) return; // already connected — do not duplicate
 
     const socket = io({
       path: '/api/socket.io',
       auth: { token },
-      // Reconnect quickly and reliably
       reconnectionDelay: 500,
       reconnectionDelayMax: 2000,
     });
@@ -51,7 +87,7 @@ export const useSocketStore = create<SocketStore>((set, get) => ({
     socket.on('connect', () => {
       set({ isConnected: true });
       // Re-join the general room after every (re)connect — socket.io drops room
-      // memberships on the server side whenever a connection is lost and re-established.
+      // memberships server-side on disconnect.
       if (get().inGeneral) {
         socket.emit('join-general');
       }
@@ -93,7 +129,15 @@ export const useSocketStore = create<SocketStore>((set, get) => ({
     const { socket } = get();
     if (socket) {
       socket.disconnect();
-      set({ socket: null, isConnected: false, inGeneral: false, typingState: {}, userLabels: {}, generalUserCount: 0 });
+      set({
+        socket: null,
+        isConnected: false,
+        inGeneral: false,
+        typingState: {},
+        userLabels: {},
+        generalUserCount: 0,
+        generalMessages: [], // clear on every disconnect so next login starts fresh
+      });
     }
   },
 
@@ -107,14 +151,14 @@ export const useSocketStore = create<SocketStore>((set, get) => ({
     get().socket?.emit('leave-general');
   },
 
-  sendGeneralMessage: (content: string) => get().socket?.emit('general-message', { content }),
-  deleteGeneralMessage: (messageId: string) => get().socket?.emit('delete-general-message', { messageId }),
-  deleteGeneralMessages: (messageIds: string[]) => get().socket?.emit('delete-general-messages', { messageIds }),
-  joinDm: (friendId: string) => get().socket?.emit('join-dm', { friendId }),
-  leaveDm: (friendId: string) => get().socket?.emit('leave-dm', { friendId }),
-  sendDmMessage: (friendId: string, content: string) => get().socket?.emit('dm-message', { friendId, content }),
-  emitTyping: (room: 'general' | string) => get().socket?.emit('typing', { room }),
-  emitStopTyping: (room: 'general' | string) => get().socket?.emit('stop-typing', { room }),
-  emitDmSeen: (friendId: string) => get().socket?.emit('dm-seen', { friendId }),
-  emitNameUpdate: (displayName: string) => get().socket?.emit('update-display-name', { displayName }),
+  sendGeneralMessage: (content) => get().socket?.emit('general-message', { content }),
+  deleteGeneralMessage: (messageId) => get().socket?.emit('delete-general-message', { messageId }),
+  deleteGeneralMessages: (messageIds) => get().socket?.emit('delete-general-messages', { messageIds }),
+  joinDm: (friendId) => get().socket?.emit('join-dm', { friendId }),
+  leaveDm: (friendId) => get().socket?.emit('leave-dm', { friendId }),
+  sendDmMessage: (friendId, content) => get().socket?.emit('dm-message', { friendId, content }),
+  emitTyping: (room) => get().socket?.emit('typing', { room }),
+  emitStopTyping: (room) => get().socket?.emit('stop-typing', { room }),
+  emitDmSeen: (friendId) => get().socket?.emit('dm-seen', { friendId }),
+  emitNameUpdate: (displayName) => get().socket?.emit('update-display-name', { displayName }),
 }));

@@ -1,86 +1,72 @@
 import { useEffect } from 'react';
 import { useSocketStore } from '../store/use-socket';
-import { GeneralMessage, DirectMessage, getGetGeneralMessagesQueryKey, getGetFriendMessagesQueryKey, getGetFriendsQueryKey } from '@workspace/api-client-react';
+import { DirectMessage, getGetFriendMessagesQueryKey, getGetFriendsQueryKey } from '@workspace/api-client-react';
 import { useQueryClient as useReactQueryClient } from '@tanstack/react-query';
 
 export function useSocketEvents() {
-  const socket = useSocketStore(state => state.socket);
+  const {
+    socket,
+    appendGeneralMessage,
+    removeGeneralMessage,
+    removeGeneralMessages,
+    patchGeneralMessage,
+  } = useSocketStore();
   const queryClient = useReactQueryClient();
 
   useEffect(() => {
     if (!socket) return;
 
-    const onNewGeneralMessage = (message: GeneralMessage) => {
-      queryClient.setQueryData<GeneralMessage[]>(getGetGeneralMessagesQueryKey(), (old = []) => {
-        // Prevent duplicates
-        if (old.some(m => m.id === message.id)) return old;
-        return [...old, message];
-      });
+    // ── General chat ──────────────────────────────────────────────────────
+    const onNewGeneralMessage = (message: Parameters<typeof appendGeneralMessage>[0]) => {
+      appendGeneralMessage(message);
     };
 
-    const onNewDm = ({ message, fromFriendId }: { message: DirectMessage, fromFriendId: string }) => {
+    const onGeneralMessageDeleted = ({ messageId }: { messageId: string }) => {
+      removeGeneralMessage(messageId);
+    };
+
+    const onGeneralMessagesDeleted = ({ messageIds }: { messageIds: string[] }) => {
+      removeGeneralMessages(messageIds);
+    };
+
+    const onGeneralSeen = ({ messageId }: { messageId: string; userId: string }) => {
+      patchGeneralMessage(messageId, { seenByMe: true });
+    };
+
+    // ── DM chat (still uses React Query) ─────────────────────────────────
+    const onNewDm = ({ message, fromFriendId }: { message: DirectMessage; fromFriendId: string }) => {
       queryClient.setQueryData<DirectMessage[]>(getGetFriendMessagesQueryKey(fromFriendId), (old = []) => {
         if (old.some(m => m.id === message.id)) return old;
         return [...old, message];
       });
     };
 
-    const onDmNotification = ({ fromFriendId }: { fromFriendId: string }) => {
-      // Invalidate or update unread count for friends
+    const onDmNotification = () => {
       queryClient.invalidateQueries({ queryKey: getGetFriendsQueryKey() });
     };
 
-    const onMessagesSeen = ({ byUserId, seenAt, messageIds }: { byUserId: string, seenAt: string, messageIds: string[] }) => {
-      queryClient.setQueryData<DirectMessage[]>(getGetFriendMessagesQueryKey(byUserId), (old = []) => {
-        return old.map(msg => {
-          if (messageIds.includes(msg.id)) {
-            return { ...msg, seenAt };
-          }
-          return msg;
-        });
-      });
-    };
-
-    const onGeneralSeen = ({ messageId, userId }: { messageId: string, userId: string }) => {
-      queryClient.setQueryData<GeneralMessage[]>(getGetGeneralMessagesQueryKey(), (old = []) => {
-        return old.map(msg => {
-          if (msg.id === messageId) {
-            return { ...msg, seenByMe: true };
-          }
-          return msg;
-        });
-      });
-    };
-
-    const onGeneralMessageDeleted = ({ messageId }: { messageId: string }) => {
-      queryClient.setQueryData<GeneralMessage[]>(getGetGeneralMessagesQueryKey(), (old = []) =>
-        old.filter(m => m.id !== messageId),
+    const onMessagesSeen = ({ byUserId, seenAt, messageIds }: { byUserId: string; seenAt: string; messageIds: string[] }) => {
+      queryClient.setQueryData<DirectMessage[]>(getGetFriendMessagesQueryKey(byUserId), (old = []) =>
+        old.map(msg => messageIds.includes(msg.id) ? { ...msg, seenAt } : msg)
       );
     };
 
-    const onGeneralMessagesDeleted = ({ messageIds }: { messageIds: string[] }) => {
-      const deleted = new Set(messageIds);
-      queryClient.setQueryData<GeneralMessage[]>(getGetGeneralMessagesQueryKey(), (old = []) =>
-        old.filter(m => !deleted.has(m.id)),
-      );
-    };
-
-    socket.on('new-general-message', onNewGeneralMessage);
-    socket.on('new-dm', onNewDm);
-    socket.on('dm-notification', onDmNotification);
-    socket.on('messages-seen', onMessagesSeen);
-    socket.on('general-seen', onGeneralSeen);
+    socket.on('new-general-message',     onNewGeneralMessage);
     socket.on('general-message-deleted', onGeneralMessageDeleted);
-    socket.on('general-messages-deleted', onGeneralMessagesDeleted);
+    socket.on('general-messages-deleted',onGeneralMessagesDeleted);
+    socket.on('general-seen',            onGeneralSeen);
+    socket.on('new-dm',                  onNewDm);
+    socket.on('dm-notification',         onDmNotification);
+    socket.on('messages-seen',           onMessagesSeen);
 
     return () => {
-      socket.off('new-general-message', onNewGeneralMessage);
-      socket.off('new-dm', onNewDm);
-      socket.off('dm-notification', onDmNotification);
-      socket.off('messages-seen', onMessagesSeen);
-      socket.off('general-seen', onGeneralSeen);
+      socket.off('new-general-message',     onNewGeneralMessage);
       socket.off('general-message-deleted', onGeneralMessageDeleted);
-      socket.off('general-messages-deleted', onGeneralMessagesDeleted);
+      socket.off('general-messages-deleted',onGeneralMessagesDeleted);
+      socket.off('general-seen',            onGeneralSeen);
+      socket.off('new-dm',                  onNewDm);
+      socket.off('dm-notification',         onDmNotification);
+      socket.off('messages-seen',           onMessagesSeen);
     };
-  }, [socket, queryClient]);
+  }, [socket, queryClient, appendGeneralMessage, removeGeneralMessage, removeGeneralMessages, patchGeneralMessage]);
 }

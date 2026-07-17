@@ -222,7 +222,7 @@ export function Sidebar({ currentTab, onSelectTab }: SidebarProps) {
         <div className="text-muted-foreground mb-1">channels</div>
         <button
           onClick={() => onSelectTab("general")}
-          className={`block w-full text-left px-1 py-0.5 ${
+          className={`block w-full text-left px-1 py-1.5 sm:py-0.5 ${
             currentTab === "general" ? "text-primary" : "text-foreground hover:text-primary"
           }`}
         >
@@ -275,7 +275,7 @@ export function Sidebar({ currentTab, onSelectTab }: SidebarProps) {
                 key={friend.id}
                 onClick={() => onSelectTab(friend.id, liveLabel)}
                 onContextMenu={(e) => handleFriendContextMenu(e, friend.id, liveLabel)}
-                className={`block w-full text-left px-1 py-0.5 truncate ${
+                className={`block w-full text-left px-1 py-1.5 sm:py-0.5 truncate ${
                   currentTab === friend.id ? "text-primary" : "text-foreground hover:text-primary"
                 }`}
               >

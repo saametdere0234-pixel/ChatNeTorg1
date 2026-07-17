@@ -1,8 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { format } from "date-fns";
 import {
   useGetGeneralMessages,
-  getGetGeneralMessagesQueryKey,
   useGetFriends,
   getGetFriendsQueryKey,
   addFriend,
@@ -68,29 +67,18 @@ function truncate(text: string, max = 40) {
 export function GeneralChat() {
   const storageEnabled = useAuthStore(s => s.storageEnabled);
 
-  // When storage is ON: load persisted messages from localStorage as initial data so
-  // history appears instantly on re-login without waiting for the server.
-  // When storage is OFF: initialData stays undefined and the query stays disabled —
-  // only real-time socket events populate the chat, giving a clean slate on every login.
-  const cachedMessages = useMemo(() => {
-    if (!storageEnabled) return undefined;
-    try {
-      const raw = localStorage.getItem(GENERAL_MESSAGES_CACHE_KEY);
-      return raw ? JSON.parse(raw) : undefined;
-    } catch {
-      return undefined;
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // intentionally once on mount — storageEnabled won't flip mid-session
+  // Source of truth: socket store.
+  // Socket events (appendGeneralMessage etc.) always update it reliably.
+  // Storage ON  → seeded from localStorage on mount + API history when it arrives.
+  // Storage OFF → starts empty every login (reset on disconnect in socket store).
+  const messages        = useSocketStore(s => s.generalMessages);
+  const initGeneralMessages = useSocketStore(s => s.initGeneralMessages);
 
-  const { data: messages = [], isLoading } = useGetGeneralMessages({
-    query: {
-      // Disable the API fetch when storage is OFF.  Socket events via setQueryData
-      // still populate the cache in real-time; they just won't survive a logout/login.
-      enabled: storageEnabled,
-      initialData: cachedMessages,
-    },
+  // Fetch full history from API — only when storage is ON
+  const { data: apiHistory } = useGetGeneralMessages({
+    query: { enabled: storageEnabled },
   });
+
   const { data: friends = [] } = useGetFriends();
   const [content, setContent] = useState("");
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
@@ -101,45 +89,53 @@ export function GeneralChat() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const generalUserCount = useSocketStore(state => state.generalUserCount);
-  const joinGeneral = useSocketStore(state => state.joinGeneral);
-  const leaveGeneral = useSocketStore(state => state.leaveGeneral);
-  const sendGeneralMessage = useSocketStore(state => state.sendGeneralMessage);
-  const deleteGeneralMessage = useSocketStore(state => state.deleteGeneralMessage);
-  const deleteGeneralMessages = useSocketStore(state => state.deleteGeneralMessages);
-  const emitTyping = useSocketStore(state => state.emitTyping);
-  const emitStopTyping = useSocketStore(state => state.emitStopTyping);
-  const typingState = useSocketStore(state => state.typingState);
-  const userLabels = useSocketStore(state => state.userLabels);
+  const generalUserCount  = useSocketStore(s => s.generalUserCount);
+  const joinGeneral       = useSocketStore(s => s.joinGeneral);
+  const leaveGeneral      = useSocketStore(s => s.leaveGeneral);
+  const sendGeneralMessage   = useSocketStore(s => s.sendGeneralMessage);
+  const deleteGeneralMessage  = useSocketStore(s => s.deleteGeneralMessage);
+  const deleteGeneralMessages = useSocketStore(s => s.deleteGeneralMessages);
+  const emitTyping        = useSocketStore(s => s.emitTyping);
+  const emitStopTyping    = useSocketStore(s => s.emitStopTyping);
+  const typingState       = useSocketStore(s => s.typingState);
+  const userLabels        = useSocketStore(s => s.userLabels);
 
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const [ctxMenu, setCtxMenu] = useState<MsgCtxMenu | null>(null);
-  const [imgCtxMenu, setImgCtxMenu] = useState<ImgCtxMenu | null>(null);
+  const [ctxMenu, setCtxMenu]         = useState<MsgCtxMenu | null>(null);
+  const [imgCtxMenu, setImgCtxMenu]   = useState<ImgCtxMenu | null>(null);
   const [blockPicker, setBlockPicker] = useState<BlockPickerMenu | null>(null);
 
-  // When storage is OFF, guarantee a clean slate on every login by wiping any
-  // residual messages that socket events from a previous session may have left in
-  // the React Query cache (queryClient.clear() on logout is best-effort, but
-  // socket events can race it).  Runs synchronously before the first render
-  // populates the message list.
+  // On mount: seed from localStorage immediately (storage ON) for instant display.
+  // Storage OFF → generalMessages is already [] from the disconnect reset.
   useEffect(() => {
-    if (!storageEnabled) {
-      queryClient.setQueryData(getGetGeneralMessagesQueryKey(), []);
+    if (storageEnabled) {
+      try {
+        const raw = localStorage.getItem(GENERAL_MESSAGES_CACHE_KEY);
+        if (raw) initGeneralMessages(JSON.parse(raw));
+      } catch { /* corrupted cache — ignore */ }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // mount only — intentional
+  }, []); // mount only
+
+  // When the API history arrives (storage ON), use it as the authoritative list
+  // (it may be fresher than what was cached in localStorage).
+  useEffect(() => {
+    if (storageEnabled && apiHistory && apiHistory.length > 0) {
+      initGeneralMessages(apiHistory);
+    }
+  }, [apiHistory, storageEnabled, initGeneralMessages]);
 
   useEffect(() => {
     joinGeneral();
     return () => leaveGeneral();
   }, [joinGeneral, leaveGeneral]);
 
-  // Persist messages to localStorage whenever they update (storage on only)
+  // Persist messages to localStorage whenever they change (storage ON only)
   useEffect(() => {
     if (!storageEnabled || messages.length === 0) return;
     try {
       localStorage.setItem(GENERAL_MESSAGES_CACHE_KEY, JSON.stringify(messages));
-    } catch { /* quota exceeded or private browsing — ignore */ }
+    } catch { /* quota exceeded — ignore */ }
   }, [messages, storageEnabled]);
 
   useEffect(() => {
@@ -249,11 +245,9 @@ export function GeneralChat() {
       {/* Messages */}
       <div
         ref={scrollRef}
-        className="flex-1 overflow-y-auto px-3 py-2 space-y-0 font-mono text-sm"
+        className="flex-1 overflow-y-auto px-3 py-3 sm:py-2 space-y-0 font-mono text-sm"
       >
-        {isLoading ? (
-          <p className="text-muted-foreground text-xs">loading...</p>
-        ) : messages.length === 0 ? (
+        {messages.length === 0 ? (
           <p className="text-muted-foreground text-xs">no messages yet. say hello.</p>
         ) : (
           messages.map((msg, index) => {
@@ -307,13 +301,13 @@ export function GeneralChat() {
             {typingUsers.join(", ")} {typingUsers.length === 1 ? "is" : "are"} typing...
           </div>
         )}
-        <form onSubmit={handleSend} className="flex gap-0 h-9">
+        <form onSubmit={handleSend} className="flex gap-0 h-11 sm:h-9">
           {/* Image upload trigger */}
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
-            className="px-2 flex items-center text-muted-foreground font-mono text-sm border-r border-border hover:text-foreground shrink-0"
-            title="Upload image (JPG/PNG, max 2 MB)"
+            className="px-3 sm:px-2 flex items-center text-muted-foreground font-mono text-sm border-r border-border hover:text-foreground shrink-0"
+            title="Upload image"
           >
             {'>'}
           </button>
@@ -328,7 +322,7 @@ export function GeneralChat() {
             value={content}
             onChange={handleTyping}
             placeholder="type a message..."
-            className="flex-1 bg-transparent px-2 py-2 text-sm font-mono text-foreground outline-none placeholder:text-muted-foreground h-9 min-w-0"
+            className="flex-1 bg-transparent px-2 py-2 text-sm font-mono text-foreground outline-none placeholder:text-muted-foreground h-11 sm:h-9 min-w-0"
           />
           <button
             type="submit"

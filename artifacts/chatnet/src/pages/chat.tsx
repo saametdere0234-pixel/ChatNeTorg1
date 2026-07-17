@@ -66,7 +66,7 @@ export default function ChatLayout() {
       {/* Main content */}
       <main className="flex-1 min-w-0 flex flex-col relative overflow-hidden">
         {/* Mobile top bar */}
-        <div className="md:hidden flex items-center gap-2 px-3 h-9 border-b border-border bg-card shrink-0">
+        <div className="md:hidden flex items-center gap-2 px-3 h-11 border-b border-border bg-card shrink-0">
           <button
             onClick={() => setSidebarOpen(true)}
             className="text-muted-foreground hover:text-foreground font-mono text-base leading-none"

@@ -208,13 +208,13 @@ export function DmChat({ friendId, friendLabel }: DmChatProps) {
             {liveFriendLabel} is typing...
           </div>
         )}
-        <form onSubmit={handleSend} className="flex gap-0 h-9">
+        <form onSubmit={handleSend} className="flex gap-0 h-11 sm:h-9">
           {/* Image upload trigger */}
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
-            className="px-2 flex items-center text-muted-foreground font-mono text-sm border-r border-border hover:text-foreground shrink-0"
-            title="Upload image (JPG/PNG, max 2 MB)"
+            className="px-3 sm:px-2 flex items-center text-muted-foreground font-mono text-sm border-r border-border hover:text-foreground shrink-0"
+            title="Upload image"
           >
             {'>'}
           </button>
@@ -229,7 +229,7 @@ export function DmChat({ friendId, friendLabel }: DmChatProps) {
             value={content}
             onChange={handleTyping}
             placeholder="type a message..."
-            className="flex-1 bg-transparent px-2 py-2 text-sm font-mono text-foreground outline-none placeholder:text-muted-foreground h-9 min-w-0"
+            className="flex-1 bg-transparent px-2 py-2 text-sm font-mono text-foreground outline-none placeholder:text-muted-foreground h-11 sm:h-9 min-w-0"
           />
           <button
             type="submit"
