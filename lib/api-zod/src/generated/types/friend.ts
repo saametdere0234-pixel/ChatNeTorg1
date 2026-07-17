@@ -8,8 +8,13 @@
 
 export interface Friend {
   id: string;
-  /** Anonymous label like Anon#5678 */
+  /** Display name of the friend */
   label: string;
+  /**
+     * Friend token, null if the friend is a guest
+     * @nullable
+     */
+  friendToken?: string | null;
   createdAt: Date;
   unreadCount?: number;
 }

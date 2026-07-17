@@ -10,8 +10,13 @@ export interface GeneralMessage {
   id: string;
   content: string;
   senderId: string;
-  /** Anonymous label like Anon#1234 */
+  /** Display name of the sender */
   senderLabel: string;
+  /**
+     * Friend token of sender, null for guests
+     * @nullable
+     */
+  senderToken?: string | null;
   createdAt: Date;
   seenByMe: boolean;
 }

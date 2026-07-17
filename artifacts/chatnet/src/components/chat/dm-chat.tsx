@@ -4,10 +4,18 @@ import { useGetFriendMessages, useMarkSeen, getGetFriendMessagesQueryKey, getGet
 import { useSocketStore } from "@/store/use-socket";
 import { useAuthContext } from "@/hooks/use-auth-context";
 import { useQueryClient } from "@tanstack/react-query";
+import { useToast } from "@/hooks/use-toast";
 
 interface DmChatProps {
   friendId: string;
   friendLabel: string;
+}
+
+function isImageMsg(content: string) {
+  return content.startsWith("__img__:");
+}
+function imgSrc(content: string) {
+  return content.slice("__img__:".length);
 }
 
 export function DmChat({ friendId, friendLabel }: DmChatProps) {
@@ -19,9 +27,11 @@ export function DmChat({ friendId, friendLabel }: DmChatProps) {
   });
   const markSeenMutation = useMarkSeen();
   const queryClient = useQueryClient();
+  const { toast } = useToast();
 
   const [content, setContent] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { user } = useAuthContext();
   const joinDm = useSocketStore(state => state.joinDm);
@@ -32,7 +42,7 @@ export function DmChat({ friendId, friendLabel }: DmChatProps) {
   const emitDmSeen = useSocketStore(state => state.emitDmSeen);
   const typingState = useSocketStore(state => state.typingState);
 
-  const typingTimeoutRef = useRef<NodeJS.Timeout>();
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   useEffect(() => {
     if (!friendId) return;
@@ -78,6 +88,23 @@ export function DmChat({ friendId, friendLabel }: DmChatProps) {
     }, 2000);
   };
 
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 300 * 1024) {
+      toast({ variant: "destructive", title: "Too large", description: "Image must be under 300 KB." });
+      e.target.value = "";
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result as string;
+      sendDmMessage(friendId, `__img__:${dataUrl}`);
+    };
+    reader.readAsDataURL(file);
+    e.target.value = "";
+  };
+
   const isFriendTyping = Object.keys(typingState[friendId] || {}).length > 0;
 
   if (!friendId) return null;
@@ -109,12 +136,11 @@ export function DmChat({ friendId, friendLabel }: DmChatProps) {
                 {showHeader && (
                   <div className="flex items-baseline gap-2 mb-0.5">
                     <span className={`text-xs font-bold ${msg.fromMe ? "text-primary" : "text-foreground"}`}>
-                      {msg.fromMe ? "you" : friendLabel}
+                      {msg.fromMe ? (user?.displayName ?? "you") : friendLabel}
                     </span>
                     <span className="text-[10px] text-muted-foreground">
                       {format(new Date(msg.createdAt), "HH:mm")}
                     </span>
-                    {/* Read receipt — only on DMs, only on your messages */}
                     {msg.fromMe && (
                       <span className="text-[10px] text-muted-foreground">
                         {msg.seenAt ? "seen" : ""}
@@ -122,9 +148,18 @@ export function DmChat({ friendId, friendLabel }: DmChatProps) {
                     )}
                   </div>
                 )}
-                <p className="text-sm text-foreground whitespace-pre-wrap break-words leading-snug">
-                  {msg.content}
-                </p>
+                {isImageMsg(msg.content) ? (
+                  <img
+                    src={imgSrc(msg.content)}
+                    alt="shared image"
+                    className="max-w-xs max-h-48 border border-border mt-0.5"
+                    style={{ display: "block" }}
+                  />
+                ) : (
+                  <p className="text-sm text-foreground whitespace-pre-wrap break-words leading-snug">
+                    {msg.content}
+                  </p>
+                )}
               </div>
             );
           })
@@ -138,15 +173,28 @@ export function DmChat({ friendId, friendLabel }: DmChatProps) {
             {friendLabel} is typing...
           </div>
         )}
-        <form onSubmit={handleSend} className="flex gap-0">
-          <span className="px-2 flex items-center text-muted-foreground font-mono text-sm border-r border-border">
+        <form onSubmit={handleSend} className="flex gap-0 h-9">
+          {/* Image upload trigger */}
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            className="px-2 flex items-center text-muted-foreground font-mono text-sm border-r border-border hover:text-foreground"
+            title="Upload image (JPG/PNG, max 300 KB)"
+          >
             {'>'}
-          </span>
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".jpg,.jpeg,.png"
+            className="hidden"
+            onChange={handleImageSelect}
+          />
           <input
             value={content}
             onChange={handleTyping}
             placeholder="type a message..."
-            className="flex-1 bg-transparent px-2 py-2 text-sm font-mono text-foreground outline-none placeholder:text-muted-foreground"
+            className="flex-1 bg-transparent px-2 py-2 text-sm font-mono text-foreground outline-none placeholder:text-muted-foreground h-9"
           />
           <button
             type="submit"

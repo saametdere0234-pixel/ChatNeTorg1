@@ -61,7 +61,7 @@ export default function AuthPage() {
     mutation: {
       onSuccess: (data) => {
         setToken(data.token);
-        setSavedFriendToken(data.user.friendToken);
+        setSavedFriendToken(data.user.friendToken ?? null);
         setLocation("/chat");
       },
       onError: () => {
@@ -74,7 +74,7 @@ export default function AuthPage() {
     mutation: {
       onSuccess: (data) => {
         setToken(data.token);
-        setSavedFriendToken(data.user.friendToken);
+        setSavedFriendToken(data.user.friendToken ?? null);
         setLocation("/chat");
       },
       onError: () => {
@@ -104,7 +104,6 @@ export default function AuthPage() {
         <div className="mb-6 text-center">
           <span className="text-2xl font-bold" style={{ color: 'var(--logo-chat)' }}>Chat</span>
           <span className="text-2xl font-bold" style={{ color: 'var(--logo-net)' }}>Net</span>
-          <p className="text-xs text-muted-foreground mt-1">anonymous chat network</p>
         </div>
 
         {/* ── LANDING ── */}

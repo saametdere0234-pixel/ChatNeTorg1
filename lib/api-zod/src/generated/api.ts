@@ -37,8 +37,10 @@ export const RegisterResponse = zod.object({
   "token": zod.string(),
   "user": zod.object({
   "id": zod.string(),
-  "username": zod.string(),
-  "friendToken": zod.string().describe('8-digit token in xx.xx.xx.xx format')
+  "displayName": zod.string().describe('What other users see — username for registered, chosen name for guests'),
+  "friendToken": zod.string().nullish().describe('8-digit token in xx.xx.xx.xx format. Null for guests.'),
+  "isGuest": zod.boolean(),
+  "quietMode": zod.boolean()
 })
 })
 
@@ -58,8 +60,10 @@ export const GuestLoginResponse = zod.object({
   "token": zod.string(),
   "user": zod.object({
   "id": zod.string(),
-  "username": zod.string(),
-  "friendToken": zod.string().describe('8-digit token in xx.xx.xx.xx format')
+  "displayName": zod.string().describe('What other users see — username for registered, chosen name for guests'),
+  "friendToken": zod.string().nullish().describe('8-digit token in xx.xx.xx.xx format. Null for guests.'),
+  "isGuest": zod.boolean(),
+  "quietMode": zod.boolean()
 })
 })
 
@@ -76,8 +80,10 @@ export const LoginResponse = zod.object({
   "token": zod.string(),
   "user": zod.object({
   "id": zod.string(),
-  "username": zod.string(),
-  "friendToken": zod.string().describe('8-digit token in xx.xx.xx.xx format')
+  "displayName": zod.string().describe('What other users see — username for registered, chosen name for guests'),
+  "friendToken": zod.string().nullish().describe('8-digit token in xx.xx.xx.xx format. Null for guests.'),
+  "isGuest": zod.boolean(),
+  "quietMode": zod.boolean()
 })
 })
 
@@ -87,8 +93,31 @@ export const LoginResponse = zod.object({
  */
 export const GetMeResponse = zod.object({
   "id": zod.string(),
-  "username": zod.string(),
-  "friendToken": zod.string().describe('8-digit token in xx.xx.xx.xx format')
+  "displayName": zod.string().describe('What other users see — username for registered, chosen name for guests'),
+  "friendToken": zod.string().nullish().describe('8-digit token in xx.xx.xx.xx format. Null for guests.'),
+  "isGuest": zod.boolean(),
+  "quietMode": zod.boolean()
+})
+
+
+/**
+ * @summary Update display name and/or quiet mode
+ */
+export const updateMeBodyDisplayNameMax = 30;
+
+
+
+export const UpdateMeBody = zod.object({
+  "displayName": zod.string().min(1).max(updateMeBodyDisplayNameMax).optional(),
+  "quietMode": zod.boolean().optional()
+})
+
+export const UpdateMeResponse = zod.object({
+  "id": zod.string(),
+  "displayName": zod.string().describe('What other users see — username for registered, chosen name for guests'),
+  "friendToken": zod.string().nullish().describe('8-digit token in xx.xx.xx.xx format. Null for guests.'),
+  "isGuest": zod.boolean(),
+  "quietMode": zod.boolean()
 })
 
 
@@ -106,7 +135,8 @@ export const GetGeneralMessagesResponseItem = zod.object({
   "id": zod.string(),
   "content": zod.string(),
   "senderId": zod.string(),
-  "senderLabel": zod.string().describe('Anonymous label like Anon#1234'),
+  "senderLabel": zod.string().describe('Display name of the sender'),
+  "senderToken": zod.string().nullish().describe('Friend token of sender, null for guests'),
   "createdAt": zod.coerce.date(),
   "seenByMe": zod.boolean()
 })
@@ -118,7 +148,8 @@ export const GetGeneralMessagesResponse = zod.array(GetGeneralMessagesResponseIt
  */
 export const GetFriendsResponseItem = zod.object({
   "id": zod.string(),
-  "label": zod.string().describe('Anonymous label like Anon#5678'),
+  "label": zod.string().describe('Display name of the friend'),
+  "friendToken": zod.string().nullish().describe('Friend token, null if the friend is a guest'),
   "createdAt": zod.coerce.date(),
   "unreadCount": zod.number().optional()
 })
@@ -134,7 +165,8 @@ export const AddFriendBody = zod.object({
 
 export const AddFriendResponse = zod.object({
   "id": zod.string(),
-  "label": zod.string().describe('Anonymous label like Anon#5678'),
+  "label": zod.string().describe('Display name of the friend'),
+  "friendToken": zod.string().nullish().describe('Friend token, null if the friend is a guest'),
   "createdAt": zod.coerce.date(),
   "unreadCount": zod.number().optional()
 })
@@ -167,6 +199,18 @@ export const MarkSeenParams = zod.object({
 
 export const MarkSeenResponse = zod.object({
   "markedCount": zod.number()
+})
+
+
+/**
+ * @summary Remove a friend
+ */
+export const RemoveFriendParams = zod.object({
+  "friendId": zod.coerce.string()
+})
+
+export const RemoveFriendResponse = zod.object({
+  "removed": zod.boolean()
 })
 
 

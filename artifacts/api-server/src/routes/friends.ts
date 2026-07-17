@@ -12,6 +12,10 @@ import { AddFriendBody } from "@workspace/api-zod";
 
 const router = Router();
 
+function displayName(user: { username: string; anonLabel: string; isGuest: boolean }): string {
+  return user.isGuest ? user.anonLabel : user.username;
+}
+
 // GET /api/friends
 router.get("/", requireAuth, async (req, res) => {
   const userId = req.userId!;
@@ -37,7 +41,6 @@ router.get("/", requireAuth, async (req, res) => {
       const friendId = friendship.user1Id === userId ? friendship.user2Id : friendship.user1Id;
       const friend = userMap.get(friendId)!;
 
-      // Count unread messages from friend (messages sent by friend that are not seen)
       const unreadMessages = await db
         .select({ id: directMessagesTable.id })
         .from(directMessagesTable)
@@ -51,7 +54,8 @@ router.get("/", requireAuth, async (req, res) => {
 
       return {
         id: friendId,
-        label: friend.anonLabel,
+        label: displayName(friend),
+        friendToken: friend.isGuest ? null : friend.friendToken,
         createdAt: friendship.createdAt.toISOString(),
         unreadCount: unreadMessages.length,
       };
@@ -71,7 +75,6 @@ router.post("/add", requireAuth, async (req, res) => {
   }
   const { token } = parsed.data;
 
-  // Token must match xx.xx.xx.xx
   if (!/^\d{2}\.\d{2}\.\d{2}\.\d{2}$/.test(token)) {
     res.status(400).json({ error: "Token must be in xx.xx.xx.xx format" });
     return;
@@ -84,6 +87,12 @@ router.post("/add", requireAuth, async (req, res) => {
   }
   if (targetUser.id === userId) {
     res.status(400).json({ error: "Cannot add yourself" });
+    return;
+  }
+
+  // Quiet mode check
+  if (targetUser.quietMode) {
+    res.status(403).json({ error: "This user is not accepting friend requests." });
     return;
   }
 
@@ -111,10 +120,39 @@ router.post("/add", requireAuth, async (req, res) => {
 
   res.status(201).json({
     id: targetUser.id,
-    label: targetUser.anonLabel,
+    label: displayName(targetUser),
+    friendToken: targetUser.isGuest ? null : targetUser.friendToken,
     createdAt: friendship.createdAt.toISOString(),
     unreadCount: 0,
   });
+});
+
+// DELETE /api/friends/:friendId
+router.delete("/:friendId", requireAuth, async (req, res) => {
+  const userId = req.userId!;
+  const { friendId } = req.params;
+
+  const [friendship] = await db
+    .select()
+    .from(friendshipsTable)
+    .where(
+      or(
+        and(eq(friendshipsTable.user1Id, userId), eq(friendshipsTable.user2Id, friendId)),
+        and(eq(friendshipsTable.user1Id, friendId), eq(friendshipsTable.user2Id, userId)),
+      ),
+    )
+    .limit(1);
+
+  if (!friendship) {
+    res.status(404).json({ error: "Friendship not found" });
+    return;
+  }
+
+  // Delete DMs first (foreign key), then friendship
+  await db.delete(directMessagesTable).where(eq(directMessagesTable.friendshipId, friendship.id));
+  await db.delete(friendshipsTable).where(eq(friendshipsTable.id, friendship.id));
+
+  res.json({ removed: true });
 });
 
 // GET /api/friends/:friendId/messages

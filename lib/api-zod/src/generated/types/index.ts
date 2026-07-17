@@ -17,4 +17,6 @@ export * from './guestLoginInput';
 export * from './healthStatus';
 export * from './loginInput';
 export * from './registerInput';
+export * from './removeFriendResult';
 export * from './seenResult';
+export * from './updateMeInput';

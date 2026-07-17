@@ -19,7 +19,10 @@ router.get("/messages", requireAuth, async (req, res) => {
       content: generalMessagesTable.content,
       senderId: generalMessagesTable.senderId,
       createdAt: generalMessagesTable.createdAt,
+      username: usersTable.username,
       anonLabel: usersTable.anonLabel,
+      isGuest: usersTable.isGuest,
+      friendToken: usersTable.friendToken,
     })
     .from(generalMessagesTable)
     .innerJoin(usersTable, eq(generalMessagesTable.senderId, usersTable.id))
@@ -51,7 +54,8 @@ router.get("/messages", requireAuth, async (req, res) => {
       id: m.id,
       content: m.content,
       senderId: m.senderId,
-      senderLabel: m.anonLabel,
+      senderLabel: m.isGuest ? m.anonLabel : m.username,
+      senderToken: m.isGuest ? null : m.friendToken,
       createdAt: m.createdAt.toISOString(),
       seenByMe: m.senderId === req.userId || seenSet.has(m.id),
     })),

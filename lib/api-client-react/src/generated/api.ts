@@ -31,7 +31,9 @@ import type {
   HealthStatus,
   LoginInput,
   RegisterInput,
-  SeenResult
+  RemoveFriendResult,
+  SeenResult,
+  UpdateMeInput
 } from './api.schemas';
 
 import { customFetch } from '../custom-fetch';
@@ -428,6 +430,77 @@ export function useGetMe<TData = Awaited<ReturnType<typeof getMe>>, TError = Err
 
 
 
+export const getUpdateMeUrl = () => {
+
+
+
+
+  return `/api/auth/me`
+}
+
+/**
+ * @summary Update display name and/or quiet mode
+ */
+export const updateMe = async (updateMeInput: UpdateMeInput, options?: RequestInit): Promise<AuthUser> => {
+
+  return customFetch<AuthUser>(getUpdateMeUrl(),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(updateMeInput)
+  }
+);}
+
+
+
+
+
+export const getUpdateMeMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateMe>>, TError,{data: BodyType<UpdateMeInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateMe>>, TError,{data: BodyType<UpdateMeInput>}, TContext> => {
+
+const mutationKey = ['updateMe'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateMe>>, {data: BodyType<UpdateMeInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  updateMe(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateMeMutationResult = NonNullable<Awaited<ReturnType<typeof updateMe>>>
+    export type UpdateMeMutationBody = BodyType<UpdateMeInput>
+    export type UpdateMeMutationError = ErrorType<void>
+
+    /**
+ * @summary Update display name and/or quiet mode
+ */
+export const useUpdateMe = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateMe>>, TError,{data: BodyType<UpdateMeInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateMe>>,
+        TError,
+        {data: BodyType<UpdateMeInput>},
+        TContext
+      > => {
+      return useMutation(getUpdateMeMutationOptions(options));
+    }
+
 export const getGetGeneralMessagesUrl = (params?: GetGeneralMessagesParams,) => {
   const normalizedParams = new URLSearchParams();
 
@@ -806,5 +879,76 @@ export const useMarkSeen = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getMarkSeenMutationOptions(options));
+    }
+
+export const getRemoveFriendUrl = (friendId: string,) => {
+
+
+
+
+  return `/api/friends/${friendId}`
+}
+
+/**
+ * @summary Remove a friend
+ */
+export const removeFriend = async (friendId: string, options?: RequestInit): Promise<RemoveFriendResult> => {
+
+  return customFetch<RemoveFriendResult>(getRemoveFriendUrl(friendId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getRemoveFriendMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof removeFriend>>, TError,{friendId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof removeFriend>>, TError,{friendId: string}, TContext> => {
+
+const mutationKey = ['removeFriend'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof removeFriend>>, {friendId: string}> = (props) => {
+          const {friendId} = props ?? {};
+
+          return  removeFriend(friendId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RemoveFriendMutationResult = NonNullable<Awaited<ReturnType<typeof removeFriend>>>
+
+    export type RemoveFriendMutationError = ErrorType<void>
+
+    /**
+ * @summary Remove a friend
+ */
+export const useRemoveFriend = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof removeFriend>>, TError,{friendId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof removeFriend>>,
+        TError,
+        {friendId: string},
+        TContext
+      > => {
+      return useMutation(getRemoveFriendMutationOptions(options));
     }
 

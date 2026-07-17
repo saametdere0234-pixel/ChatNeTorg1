@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, boolean } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -8,6 +8,8 @@ export const usersTable = pgTable("users", {
   passwordHash: text("password_hash").notNull(),
   friendToken: text("friend_token").notNull().unique(),
   anonLabel: text("anon_label").notNull(),
+  isGuest: boolean("is_guest").notNull().default(false),
+  quietMode: boolean("quiet_mode").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

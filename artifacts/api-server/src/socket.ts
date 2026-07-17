@@ -15,7 +15,8 @@ import { logger } from "./lib/logger.js";
 
 interface AuthSocket {
   userId: string;
-  anonLabel: string;
+  displayLabel: string; // username for registered users, anonLabel for guests
+  friendToken: string | null; // null for guests
 }
 
 export function initSocket(httpServer: HttpServer): SocketIOServer {
@@ -36,7 +37,8 @@ export function initSocket(httpServer: HttpServer): SocketIOServer {
 
     (socket as unknown as { _auth: AuthSocket })._auth = {
       userId: user.id,
-      anonLabel: user.anonLabel,
+      displayLabel: user.isGuest ? user.anonLabel : user.username,
+      friendToken: user.isGuest ? null : user.friendToken,
     };
     next();
   });
@@ -49,7 +51,7 @@ export function initSocket(httpServer: HttpServer): SocketIOServer {
   }
 
   io.on("connection", (socket) => {
-    const { userId, anonLabel } = getAuth(socket);
+    const { userId, displayLabel, friendToken } = getAuth(socket);
     logger.info({ userId }, "Socket connected");
 
     // ── General chat ──────────────────────────────────────────────────
@@ -63,7 +65,8 @@ export function initSocket(httpServer: HttpServer): SocketIOServer {
 
     socket.on("general-message", async (data: { content: string }) => {
       if (!data?.content?.trim()) return;
-      const content = data.content.trim().slice(0, 2000);
+      // Allow up to 500KB for images (base64)
+      const content = data.content.trim().slice(0, 524288);
       const id = generateId();
 
       await db.insert(generalMessagesTable).values({ id, senderId: userId, content });
@@ -72,7 +75,8 @@ export function initSocket(httpServer: HttpServer): SocketIOServer {
         id,
         content,
         senderId: userId,
-        senderLabel: anonLabel,
+        senderLabel: displayLabel,
+        senderToken: friendToken,
         createdAt: new Date().toISOString(),
         seenByMe: true,
       };
@@ -97,7 +101,6 @@ export function initSocket(httpServer: HttpServer): SocketIOServer {
     socket.on("join-dm", async (data: { friendId: string }) => {
       if (!data?.friendId) return;
       const roomId = dmRoom(userId, data.friendId);
-      // Verify they are actually friends
       const [friendship] = await db
         .select()
         .from(friendshipsTable)
@@ -119,7 +122,8 @@ export function initSocket(httpServer: HttpServer): SocketIOServer {
 
     socket.on("dm-message", async (data: { friendId: string; content: string }) => {
       if (!data?.friendId || !data?.content?.trim()) return;
-      const content = data.content.trim().slice(0, 2000);
+      // Allow up to 500KB for images (base64)
+      const content = data.content.trim().slice(0, 524288);
 
       const [friendship] = await db
         .select()
@@ -146,12 +150,8 @@ export function initSocket(httpServer: HttpServer): SocketIOServer {
       const msgForSender = { id, content, senderId: userId, fromMe: true, createdAt: new Date().toISOString(), seenAt: null };
       const msgForReceiver = { id, content, senderId: userId, fromMe: false, createdAt: new Date().toISOString(), seenAt: null };
 
-      // Send to the sender's own socket
       socket.emit("new-dm", { message: msgForSender, fromFriendId: data.friendId });
-      // Broadcast to the dm room (friend sees it)
       socket.to(room).emit("new-dm", { message: msgForReceiver, fromFriendId: userId });
-
-      // Also notify friend outside the DM room (for unread badge)
       socket.to(`user:${data.friendId}`).emit("dm-notification", { fromFriendId: userId });
     });
 
@@ -196,14 +196,12 @@ export function initSocket(httpServer: HttpServer): SocketIOServer {
       const key = `${data.room}:${userId}`;
 
       if (data.room === "general") {
-        socket.to("general").emit("typing", { userId, anonLabel, room: "general" });
+        socket.to("general").emit("typing", { userId, anonLabel: displayLabel, room: "general" });
       } else {
-        // DM typing
         const room = dmRoom(userId, data.room);
-        socket.to(room).emit("typing", { userId, anonLabel, room: data.room });
+        socket.to(room).emit("typing", { userId, anonLabel: displayLabel, room: data.room });
       }
 
-      // Auto-stop typing after 3s
       clearTimeout(typingTimers.get(key));
       typingTimers.set(
         key,
@@ -227,7 +225,6 @@ export function initSocket(httpServer: HttpServer): SocketIOServer {
 
     socket.on("disconnect", () => {
       logger.info({ userId }, "Socket disconnected");
-      // Clean up typing timers for this user
       for (const [key, timer] of typingTimers) {
         if (key.endsWith(`:${userId}`)) {
           clearTimeout(timer);
@@ -241,7 +238,6 @@ export function initSocket(httpServer: HttpServer): SocketIOServer {
 }
 
 function dmRoom(userA: string, userB: string): string {
-  // Deterministic room name regardless of who's A or B
   return `dm:${[userA, userB].sort().join(":")}`;
 }
 

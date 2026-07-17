@@ -8,7 +8,13 @@
 
 export interface AuthUser {
   id: string;
-  username: string;
-  /** 8-digit token in xx.xx.xx.xx format */
-  friendToken: string;
+  /** What other users see — username for registered, chosen name for guests */
+  displayName: string;
+  /**
+     * 8-digit token in xx.xx.xx.xx format. Null for guests.
+     * @nullable
+     */
+  friendToken?: string | null;
+  isGuest: boolean;
+  quietMode: boolean;
 }

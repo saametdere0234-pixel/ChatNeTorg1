@@ -34,11 +34,26 @@ export interface GuestLoginInput {
   displayName: string;
 }
 
+export interface UpdateMeInput {
+  /**
+     * @minLength 1
+     * @maxLength 30
+     */
+  displayName?: string;
+  quietMode?: boolean;
+}
+
 export interface AuthUser {
   id: string;
-  username: string;
-  /** 8-digit token in xx.xx.xx.xx format */
-  friendToken: string;
+  /** What other users see — username for registered, chosen name for guests */
+  displayName: string;
+  /**
+     * 8-digit token in xx.xx.xx.xx format. Null for guests.
+     * @nullable
+     */
+  friendToken?: string | null;
+  isGuest: boolean;
+  quietMode: boolean;
 }
 
 export interface AuthResponse {
@@ -50,8 +65,13 @@ export interface GeneralMessage {
   id: string;
   content: string;
   senderId: string;
-  /** Anonymous label like Anon#1234 */
+  /** Display name of the sender */
   senderLabel: string;
+  /**
+     * Friend token of sender, null for guests
+     * @nullable
+     */
+  senderToken?: string | null;
   createdAt: string;
   seenByMe: boolean;
 }
@@ -68,8 +88,13 @@ export interface DirectMessage {
 
 export interface Friend {
   id: string;
-  /** Anonymous label like Anon#5678 */
+  /** Display name of the friend */
   label: string;
+  /**
+     * Friend token, null if the friend is a guest
+     * @nullable
+     */
+  friendToken?: string | null;
   createdAt: string;
   unreadCount?: number;
 }
@@ -81,6 +106,10 @@ export interface AddFriendInput {
 
 export interface SeenResult {
   markedCount: number;
+}
+
+export interface RemoveFriendResult {
+  removed: boolean;
 }
 
 export type GetGeneralMessagesParams = {
