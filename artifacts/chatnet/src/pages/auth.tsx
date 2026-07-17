@@ -111,7 +111,8 @@ export default function AuthPage() {
   });
 
   const handleEnterChat = () => {
-    resetSession();
+    // Clear any stale query cache from a prior session without touching savedFriendToken
+    queryClient.clear();
     setToken(newToken);
     setLocation("/chat");
   };

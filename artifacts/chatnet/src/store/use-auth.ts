@@ -1,8 +1,11 @@
 import { create } from 'zustand';
 
-// All localStorage keys used by ChatNet
+// Keys that are wiped on clearAllData / storage-off toggle
+// NOTE: chatnet_friend_token is intentionally excluded — it is the user's
+// permanent identity and must survive logout/clearAllData cycles so the
+// login form can always pre-fill it.
 export const GENERAL_MESSAGES_CACHE_KEY = 'chatnet_general_messages';
-const STORAGE_KEYS = ['chatnet_token', 'chatnet_friend_token', GENERAL_MESSAGES_CACHE_KEY];
+const STORAGE_KEYS = ['chatnet_token', GENERAL_MESSAGES_CACHE_KEY];
 const STORAGE_ENABLED_KEY = 'chatnet_storage_enabled';
 
 interface AuthStore {
@@ -26,32 +29,24 @@ function readStorageEnabled(): boolean {
 
 export const useAuthStore = create<AuthStore>((set, get) => ({
   token: null,
+  // Always read from localStorage — friend token is always persisted
   savedFriendToken: localStorage.getItem('chatnet_friend_token'),
   storageEnabled: readStorageEnabled(),
 
   setToken: (token) => {
     const { storageEnabled } = get();
-    if (storageEnabled) {
-      if (token) {
-        localStorage.setItem('chatnet_token', token);
-      } else {
-        localStorage.removeItem('chatnet_token');
-      }
+    if (storageEnabled && token) {
+      localStorage.setItem('chatnet_token', token);
     } else {
-      // Storage off — never persist token
       localStorage.removeItem('chatnet_token');
     }
     set({ token });
   },
 
   setSavedFriendToken: (ft) => {
-    const { storageEnabled } = get();
-    if (storageEnabled) {
-      if (ft) {
-        localStorage.setItem('chatnet_friend_token', ft);
-      } else {
-        localStorage.removeItem('chatnet_friend_token');
-      }
+    // Always persist — friend token is the user's login identity, not session data
+    if (ft) {
+      localStorage.setItem('chatnet_friend_token', ft);
     } else {
       localStorage.removeItem('chatnet_friend_token');
     }
@@ -59,15 +54,14 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
   },
 
   setStorageEnabled: (enabled) => {
-    // Always persist this preference itself
     localStorage.setItem(STORAGE_ENABLED_KEY, String(enabled));
     if (!enabled) {
-      // Turning off — remove all session data from localStorage now
+      // Turning off — purge session data (token + cached messages, not friend token)
       for (const key of STORAGE_KEYS) {
         localStorage.removeItem(key);
       }
     } else {
-      // Turning on — write current token if any
+      // Turning on — re-persist current token if any
       const { token } = get();
       if (token) localStorage.setItem('chatnet_token', token);
     }
@@ -75,9 +69,11 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
   },
 
   clearAllData: () => {
+    // Wipe session keys; friend token is intentionally preserved
     for (const key of STORAGE_KEYS) {
       localStorage.removeItem(key);
     }
-    set({ token: null, savedFriendToken: null });
+    // Only reset token in memory; savedFriendToken stays so the login form can pre-fill
+    set({ token: null });
   },
 }));

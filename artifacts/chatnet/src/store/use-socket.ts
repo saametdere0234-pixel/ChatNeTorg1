@@ -9,6 +9,7 @@ interface TypingState {
 interface SocketStore {
   socket: Socket | null;
   isConnected: boolean;
+  inGeneral: boolean; // tracks whether we are currently in the general room
   typingState: TypingState;
   userLabels: Record<string, string>; // userId -> latest known display label
   generalUserCount: number;
@@ -31,60 +32,56 @@ interface SocketStore {
 export const useSocketStore = create<SocketStore>((set, get) => ({
   socket: null,
   isConnected: false,
+  inGeneral: false,
   typingState: {},
   userLabels: {},
   generalUserCount: 0,
 
   connect: (token: string) => {
-    const currentSocket = get().socket;
-    if (currentSocket) return;
+    if (get().socket) return; // already connected — do not create a duplicate
 
     const socket = io({
       path: '/api/socket.io',
       auth: { token },
+      // Reconnect quickly and reliably
+      reconnectionDelay: 500,
+      reconnectionDelayMax: 2000,
     });
 
     socket.on('connect', () => {
       set({ isConnected: true });
+      // Re-join the general room after every (re)connect — socket.io drops room
+      // memberships on the server side whenever a connection is lost and re-established.
+      if (get().inGeneral) {
+        socket.emit('join-general');
+      }
     });
 
     socket.on('disconnect', () => {
       set({ isConnected: false });
     });
 
-    socket.on('typing', ({ userId, anonLabel, room }: { userId: string, anonLabel: string, room: string }) => {
+    socket.on('typing', ({ userId, anonLabel, room }: { userId: string; anonLabel: string; room: string }) => {
       set((state) => ({
         typingState: {
           ...state.typingState,
-          [room]: {
-            ...(state.typingState[room] || {}),
-            [userId]: anonLabel,
-          },
+          [room]: { ...(state.typingState[room] || {}), [userId]: anonLabel },
         },
       }));
     });
 
-    socket.on('stop-typing', ({ userId, room }: { userId: string, room: string }) => {
+    socket.on('stop-typing', ({ userId, room }: { userId: string; room: string }) => {
       set((state) => {
         const roomState = { ...state.typingState[room] };
         delete roomState[userId];
-        return {
-          typingState: {
-            ...state.typingState,
-            [room]: roomState,
-          },
-        };
+        return { typingState: { ...state.typingState, [room]: roomState } };
       });
     });
 
-    // Track live display name changes from other users
     socket.on('display-name-changed', ({ userId, newLabel }: { userId: string; newLabel: string }) => {
-      set((state) => ({
-        userLabels: { ...state.userLabels, [userId]: newLabel },
-      }));
+      set((state) => ({ userLabels: { ...state.userLabels, [userId]: newLabel } }));
     });
 
-    // Live active user count in general channel
     socket.on('general-user-count', (count: number) => {
       set({ generalUserCount: count });
     });
@@ -96,12 +93,20 @@ export const useSocketStore = create<SocketStore>((set, get) => ({
     const { socket } = get();
     if (socket) {
       socket.disconnect();
-      set({ socket: null, isConnected: false, typingState: {}, userLabels: {} });
+      set({ socket: null, isConnected: false, inGeneral: false, typingState: {}, userLabels: {}, generalUserCount: 0 });
     }
   },
 
-  joinGeneral: () => get().socket?.emit('join-general'),
-  leaveGeneral: () => get().socket?.emit('leave-general'),
+  joinGeneral: () => {
+    set({ inGeneral: true });
+    get().socket?.emit('join-general');
+  },
+
+  leaveGeneral: () => {
+    set({ inGeneral: false });
+    get().socket?.emit('leave-general');
+  },
+
   sendGeneralMessage: (content: string) => get().socket?.emit('general-message', { content }),
   deleteGeneralMessage: (messageId: string) => get().socket?.emit('delete-general-message', { messageId }),
   deleteGeneralMessages: (messageIds: string[]) => get().socket?.emit('delete-general-messages', { messageIds }),

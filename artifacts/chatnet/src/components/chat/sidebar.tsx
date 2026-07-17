@@ -289,15 +289,17 @@ export function Sidebar({ currentTab, onSelectTab }: SidebarProps) {
         )}
       </div>
 
-      {/* Storage toggle */}
-      <div className="px-3 py-2 border-b border-border shrink-0">
-        <button
-          onClick={toggleStorage}
-          className={`text-xs ${storageEnabled ? "text-primary" : "text-muted-foreground hover:text-foreground"}`}
-        >
-          {storageEnabled ? "[storage: on]" : "[storage: off]"}
-        </button>
-      </div>
+      {/* Storage toggle — hidden for guests */}
+      {!user?.isGuest && (
+        <div className="px-3 py-2 border-b border-border shrink-0">
+          <button
+            onClick={toggleStorage}
+            className={`text-xs ${storageEnabled ? "text-primary" : "text-muted-foreground hover:text-foreground"}`}
+          >
+            {storageEnabled ? "[storage: on]" : "[storage: off]"}
+          </button>
+        </div>
+      )}
 
       {/* Quiet Mode */}
       <div className="px-3 py-2 border-b border-border shrink-0">

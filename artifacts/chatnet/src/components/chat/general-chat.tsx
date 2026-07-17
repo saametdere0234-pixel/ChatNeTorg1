@@ -67,7 +67,10 @@ function truncate(text: string, max = 40) {
 export function GeneralChat() {
   const storageEnabled = useAuthStore(s => s.storageEnabled);
 
-  // Load persisted messages from localStorage as initial data when storage is on
+  // When storage is ON: load persisted messages from localStorage as initial data so
+  // history appears instantly on re-login without waiting for the server.
+  // When storage is OFF: initialData stays undefined and the query stays disabled —
+  // only real-time socket events populate the chat, giving a clean slate on every login.
   const cachedMessages = useMemo(() => {
     if (!storageEnabled) return undefined;
     try {
@@ -77,10 +80,15 @@ export function GeneralChat() {
       return undefined;
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // intentionally run once on mount
+  }, []); // intentionally once on mount — storageEnabled won't flip mid-session
 
   const { data: messages = [], isLoading } = useGetGeneralMessages({
-    query: { initialData: cachedMessages },
+    query: {
+      // Disable the API fetch when storage is OFF.  Socket events via setQueryData
+      // still populate the cache in real-time; they just won't survive a logout/login.
+      enabled: storageEnabled,
+      initialData: cachedMessages,
+    },
   });
   const { data: friends = [] } = useGetFriends();
   const [content, setContent] = useState("");
