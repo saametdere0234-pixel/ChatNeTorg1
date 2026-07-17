@@ -46,6 +46,13 @@ export function initSocket(httpServer: HttpServer): SocketIOServer {
   // Typing timers: map of `room:userId` -> timeout
   const typingTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
+  // Live general-channel presence: set of socket IDs currently in general
+  const generalSockets = new Set<string>();
+
+  function broadcastGeneralCount() {
+    io.to("general").emit("general-user-count", generalSockets.size);
+  }
+
   function getAuth(socket: Parameters<Parameters<typeof io.on>[1]>[0]): AuthSocket {
     return (socket as unknown as { _auth: AuthSocket })._auth;
   }
@@ -57,10 +64,14 @@ export function initSocket(httpServer: HttpServer): SocketIOServer {
     // ── General chat ──────────────────────────────────────────────────
     socket.on("join-general", () => {
       socket.join("general");
+      generalSockets.add(socket.id);
+      broadcastGeneralCount();
     });
 
     socket.on("leave-general", () => {
       socket.leave("general");
+      generalSockets.delete(socket.id);
+      broadcastGeneralCount();
     });
 
     socket.on("general-message", async (data: { content: string }) => {
@@ -283,6 +294,10 @@ export function initSocket(httpServer: HttpServer): SocketIOServer {
           clearTimeout(timer);
           typingTimers.delete(key);
         }
+      }
+      if (generalSockets.has(socket.id)) {
+        generalSockets.delete(socket.id);
+        broadcastGeneralCount();
       }
     });
   });

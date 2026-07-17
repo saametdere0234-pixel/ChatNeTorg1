@@ -75,6 +75,7 @@ export function GeneralChat() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
+  const generalUserCount = useSocketStore(state => state.generalUserCount);
   const joinGeneral = useSocketStore(state => state.joinGeneral);
   const leaveGeneral = useSocketStore(state => state.leaveGeneral);
   const sendGeneralMessage = useSocketStore(state => state.sendGeneralMessage);
@@ -194,7 +195,9 @@ export function GeneralChat() {
       {/* Channel header */}
       <div className="px-3 py-1.5 border-b border-border bg-card flex items-center justify-between">
         <span className="text-xs font-mono text-foreground">#general</span>
-        <span className="text-xs font-mono text-muted-foreground">public</span>
+        <span className="text-xs font-mono text-muted-foreground">
+          {generalUserCount > 0 ? `${generalUserCount} online` : "public"}
+        </span>
       </div>
 
       {/* Messages */}

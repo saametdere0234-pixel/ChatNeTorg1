@@ -11,6 +11,7 @@ interface SocketStore {
   isConnected: boolean;
   typingState: TypingState;
   userLabels: Record<string, string>; // userId -> latest known display label
+  generalUserCount: number;
   connect: (token: string) => void;
   disconnect: () => void;
   joinGeneral: () => void;
@@ -32,6 +33,7 @@ export const useSocketStore = create<SocketStore>((set, get) => ({
   isConnected: false,
   typingState: {},
   userLabels: {},
+  generalUserCount: 0,
 
   connect: (token: string) => {
     const currentSocket = get().socket;
@@ -80,6 +82,11 @@ export const useSocketStore = create<SocketStore>((set, get) => ({
       set((state) => ({
         userLabels: { ...state.userLabels, [userId]: newLabel },
       }));
+    });
+
+    // Live active user count in general channel
+    socket.on('general-user-count', (count: number) => {
+      set({ generalUserCount: count });
     });
 
     set({ socket });

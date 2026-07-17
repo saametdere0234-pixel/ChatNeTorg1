@@ -6,6 +6,7 @@ import { useLogin, useRegister, useGuestLogin } from "@workspace/api-client-reac
 import { useAuthStore } from "@/store/use-auth";
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
+import { useQueryClient } from "@tanstack/react-query";
 
 // ── schemas ──────────────────────────────────────────────────────────────────
 
@@ -15,7 +16,7 @@ const registerSchema = z.object({
 });
 
 const loginSchema = z.object({
-  id: z.string().min(1, "required"), // 'id' field maps to username on the backend
+  id: z.string().min(1, "required"), // friend token used as login ID
   password: z.string().min(1, "required"),
 });
 
@@ -29,16 +30,26 @@ type GuestValues    = z.infer<typeof guestSchema>;
 
 // ── component ────────────────────────────────────────────────────────────────
 
-type Mode = "landing" | "create" | "login";
+type Mode = "landing" | "create" | "registered" | "login";
 
 export default function AuthPage() {
   const [mode, setMode] = useState<Mode>("landing");
+  const [newFriendToken, setNewFriendToken] = useState<string>("");
+  const [newToken, setNewToken] = useState<string>("");
   const [_, setLocation] = useLocation();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   const setToken = useAuthStore(s => s.setToken);
   const setSavedFriendToken = useAuthStore(s => s.setSavedFriendToken);
+  const clearAllData = useAuthStore(s => s.clearAllData);
   const savedFriendToken = useAuthStore(s => s.savedFriendToken);
+
+  // Clear any stale session before starting fresh auth
+  const resetSession = () => {
+    clearAllData();
+    queryClient.clear();
+  };
 
   // ── forms ──
   const registerForm = useForm<RegisterValues>({
@@ -60,9 +71,11 @@ export default function AuthPage() {
   const registerMutation = useRegister({
     mutation: {
       onSuccess: (data) => {
-        setToken(data.token);
+        // Don't set the token yet — show the user their ID first
+        setNewFriendToken(data.user.friendToken ?? "");
+        setNewToken(data.token);
         setSavedFriendToken(data.user.friendToken ?? null);
-        setLocation("/chat");
+        setMode("registered");
       },
       onError: () => {
         toast({ variant: "destructive", title: "Error", description: "Username may be taken or invalid." });
@@ -73,6 +86,7 @@ export default function AuthPage() {
   const loginMutation = useLogin({
     mutation: {
       onSuccess: (data) => {
+        resetSession();
         setToken(data.token);
         setSavedFriendToken(data.user.friendToken ?? null);
         setLocation("/chat");
@@ -86,6 +100,7 @@ export default function AuthPage() {
   const guestMutation = useGuestLogin({
     mutation: {
       onSuccess: (data) => {
+        resetSession();
         setToken(data.token);
         setLocation("/chat");
       },
@@ -94,6 +109,17 @@ export default function AuthPage() {
       },
     },
   });
+
+  const handleEnterChat = () => {
+    resetSession();
+    setToken(newToken);
+    setLocation("/chat");
+  };
+
+  const copyToken = () => {
+    navigator.clipboard.writeText(newFriendToken);
+    toast({ title: "Copied", description: "Your ID copied to clipboard." });
+  };
 
   // ── render ──
   return (
@@ -171,6 +197,44 @@ export default function AuthPage() {
           </div>
         )}
 
+        {/* ── REGISTERED — show ID before entering ── */}
+        {mode === "registered" && (
+          <div className="border border-border bg-card p-4">
+            <div className="mb-3">
+              <span className="text-sm text-foreground">Account Created</span>
+            </div>
+
+            <p className="text-xs text-muted-foreground mb-3">
+              Save your login ID — you'll need it every time you log in. Your username is only used in chat.
+            </p>
+
+            <div className="border border-primary bg-background px-3 py-2 mb-3">
+              <div className="text-[10px] text-muted-foreground mb-1">your login ID</div>
+              <div className="text-base font-bold text-primary tracking-widest">{newFriendToken}</div>
+            </div>
+
+            <div className="flex gap-2 mb-4">
+              <button
+                onClick={copyToken}
+                className="flex-1 border border-border px-2 py-1 text-xs text-muted-foreground hover:text-foreground hover:bg-accent"
+              >
+                [ Copy ID ]
+              </button>
+            </div>
+
+            <p className="text-[10px] text-muted-foreground mb-3">
+              This ID is also shown in the sidebar whenever you're logged in.
+            </p>
+
+            <button
+              onClick={handleEnterChat}
+              className="w-full border border-border px-2 py-1.5 text-sm text-foreground hover:bg-accent"
+            >
+              [ Enter Chat ]
+            </button>
+          </div>
+        )}
+
         {/* ── LOGIN ── */}
         {mode === "login" && (
           <div className="border border-border bg-card p-4">
@@ -181,12 +245,12 @@ export default function AuthPage() {
 
             <form onSubmit={loginForm.handleSubmit(data => loginMutation.mutate({ data }))} className="space-y-2">
               <div>
-                <label className="text-xs text-muted-foreground block mb-0.5">username</label>
+                <label className="text-xs text-muted-foreground block mb-0.5">your ID</label>
                 <input
                   {...loginForm.register("id")}
                   autoComplete="username"
                   className="w-full bg-background border border-border px-2 py-1 text-sm text-foreground outline-none focus:border-primary placeholder:text-muted-foreground"
-                  placeholder="your username"
+                  placeholder="xx.xx.xx.xx"
                 />
                 {loginForm.formState.errors.id && (
                   <p className="text-xs text-destructive mt-0.5">{loginForm.formState.errors.id.message}</p>

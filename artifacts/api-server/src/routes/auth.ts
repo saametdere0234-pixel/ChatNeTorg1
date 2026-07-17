@@ -63,7 +63,7 @@ router.post("/login", async (req, res) => {
     return;
   }
 
-  const [user] = await db.select().from(usersTable).where(eq(usersTable.username, id.trim())).limit(1);
+  const [user] = await db.select().from(usersTable).where(eq(usersTable.friendToken, id.trim())).limit(1);
   if (!user) {
     res.status(401).json({ error: "Invalid credentials" });
     return;

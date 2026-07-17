@@ -160,7 +160,9 @@ export function Sidebar({ currentTab, onSelectTab }: SidebarProps) {
   };
 
   const handleLogout = () => {
+    // Completely wipe all session state so the next account starts fresh
     setToken(null);
+    queryClient.clear(); // purge all React Query cache (user, messages, friends)
     setLocation("/auth");
   };
 
