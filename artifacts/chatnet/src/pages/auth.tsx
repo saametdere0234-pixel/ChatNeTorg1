@@ -1,223 +1,257 @@
-import { zodResolver } from "@hookform/resolvers/zod";
+import { useState } from "react";
 import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { useLogin, useRegister } from "@workspace/api-client-react";
+import { useLogin, useRegister, useGuestLogin } from "@workspace/api-client-react";
 import { useAuthStore } from "@/store/use-auth";
 import { useLocation } from "wouter";
-import { Button } from "@/components/ui/button";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import { TerminalSquare } from "lucide-react";
 
-const authSchema = z.object({
-  username: z.string().min(3).max(30).regex(/^[a-zA-Z0-9_]+$/),
-  password: z.string().min(6),
+// ── schemas ──────────────────────────────────────────────────────────────────
+
+const registerSchema = z.object({
+  username: z.string().min(3).max(30).regex(/^[a-zA-Z0-9_]+$/, "letters, numbers, _ only"),
+  password: z.string().min(6, "at least 6 characters"),
 });
 
-type AuthValues = z.infer<typeof authSchema>;
+const loginSchema = z.object({
+  id: z.string().min(1, "required"),
+  password: z.string().min(1, "required"),
+});
+
+const guestSchema = z.object({
+  displayName: z.string().min(1, "required").max(30),
+});
+
+type RegisterValues = z.infer<typeof registerSchema>;
+type LoginValues    = z.infer<typeof loginSchema>;
+type GuestValues    = z.infer<typeof guestSchema>;
+
+// ── component ────────────────────────────────────────────────────────────────
+
+type Mode = "landing" | "create" | "login";
 
 export default function AuthPage() {
+  const [mode, setMode] = useState<Mode>("landing");
   const [_, setLocation] = useLocation();
-  const setToken = useAuthStore((state) => state.setToken);
   const { toast } = useToast();
 
-  const loginForm = useForm<AuthValues>({
-    resolver: zodResolver(authSchema),
+  const setToken = useAuthStore(s => s.setToken);
+  const setSavedFriendToken = useAuthStore(s => s.setSavedFriendToken);
+  const savedFriendToken = useAuthStore(s => s.savedFriendToken);
+
+  // ── forms ──
+  const registerForm = useForm<RegisterValues>({
+    resolver: zodResolver(registerSchema),
     defaultValues: { username: "", password: "" },
   });
 
-  const registerForm = useForm<AuthValues>({
-    resolver: zodResolver(authSchema),
-    defaultValues: { username: "", password: "" },
+  const loginForm = useForm<LoginValues>({
+    resolver: zodResolver(loginSchema),
+    defaultValues: { id: savedFriendToken ?? "", password: "" },
+  });
+
+  const guestForm = useForm<GuestValues>({
+    resolver: zodResolver(guestSchema),
+    defaultValues: { displayName: "" },
+  });
+
+  // ── mutations ──
+  const registerMutation = useRegister({
+    mutation: {
+      onSuccess: (data) => {
+        setToken(data.token);
+        setSavedFriendToken(data.user.friendToken);
+        setLocation("/chat");
+      },
+      onError: () => {
+        toast({ variant: "destructive", title: "Error", description: "Username may be taken or invalid." });
+      },
+    },
   });
 
   const loginMutation = useLogin({
     mutation: {
       onSuccess: (data) => {
         setToken(data.token);
+        setSavedFriendToken(data.user.friendToken);
         setLocation("/chat");
       },
       onError: () => {
-        toast({
-          variant: "destructive",
-          title: "Access Denied",
-          description: "Invalid credentials.",
-        });
+        toast({ variant: "destructive", title: "Error", description: "Invalid ID or password." });
       },
     },
   });
 
-  const registerMutation = useRegister({
+  const guestMutation = useGuestLogin({
     mutation: {
       onSuccess: (data) => {
         setToken(data.token);
         setLocation("/chat");
       },
       onError: () => {
-        toast({
-          variant: "destructive",
-          title: "Registration Failed",
-          description: "Username may be taken or invalid.",
-        });
+        toast({ variant: "destructive", title: "Error", description: "Could not create guest session." });
       },
     },
   });
 
+  // ── render ──
   return (
-    <div className="min-h-screen w-full flex bg-background text-foreground selection:bg-primary selection:text-primary-foreground">
-      {/* Visual left panel */}
-      <div className="hidden lg:flex flex-1 flex-col items-center justify-center border-r border-border p-12 bg-black relative overflow-hidden">
-        <div className="absolute inset-0 opacity-[0.03] pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle at 2px 2px, hsl(var(--primary)) 1px, transparent 0)', backgroundSize: '32px 32px' }}></div>
-        <div className="max-w-md w-full z-10 relative">
-          <TerminalSquare className="w-16 h-16 text-primary mb-8" />
-          <h1 className="text-6xl font-bold tracking-tighter mb-4 text-white">ChatNet</h1>
-          <p className="text-xl text-muted-foreground mb-8">
-            Terminal interface initialized.<br />
-            Anonymity protocol engaged.<br />
-            Awaiting connection...
-          </p>
-          <div className="font-mono text-sm text-primary opacity-50 flex flex-col gap-1">
-            <span>{'>'} SYSTEM_BOOT_SEQUENCE_STARTED</span>
-            <span>{'>'} LOADING_ENCRYPTION_MODULES... OK</span>
-            <span>{'>'} ESTABLISHING_SECURE_TUNNEL... OK</span>
-            <span className="animate-pulse">{'>'} WAITING_FOR_USER_INPUT_</span>
+    <div className="min-h-screen bg-background flex items-start justify-center pt-16 px-4 font-mono">
+      <div className="w-full max-w-xs">
+
+        {/* Logo */}
+        <div className="mb-6 text-center">
+          <span className="text-2xl font-bold" style={{ color: 'var(--logo-chat)' }}>Chat</span>
+          <span className="text-2xl font-bold" style={{ color: 'var(--logo-net)' }}>Net</span>
+          <p className="text-xs text-muted-foreground mt-1">anonymous chat network</p>
+        </div>
+
+        {/* ── LANDING ── */}
+        {mode === "landing" && (
+          <div className="border border-border bg-card p-4">
+            <button
+              onClick={() => setMode("create")}
+              className="block w-full text-left px-2 py-1.5 text-sm text-foreground border border-border mb-2 hover:bg-accent"
+            >
+              [ Create Account ]
+            </button>
+            <button
+              onClick={() => setMode("login")}
+              className="block w-full text-left px-2 py-1.5 text-sm text-foreground border border-border hover:bg-accent"
+            >
+              [ Login ]
+            </button>
           </div>
-        </div>
-      </div>
+        )}
 
-      {/* Forms right panel */}
-      <div className="flex-1 flex items-center justify-center p-6 md:p-12 relative">
-        <div className="absolute top-8 right-8 flex gap-2">
-          <span className="w-2 h-2 rounded-full bg-primary animate-pulse"></span>
-          <span className="font-mono text-xs text-primary/70">OFFLINE</span>
-        </div>
-
-        <div className="max-w-xl w-full grid grid-cols-1 md:grid-cols-2 gap-12">
-          {/* Login Form */}
-          <div className="flex flex-col">
-            <div className="mb-6">
-              <h2 className="text-2xl font-bold text-white mb-2">Connect</h2>
-              <p className="text-sm text-muted-foreground">Access existing session</p>
+        {/* ── CREATE ACCOUNT ── */}
+        {mode === "create" && (
+          <div className="border border-border bg-card p-4">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-sm text-foreground">Create Account</span>
+              <button onClick={() => setMode("landing")} className="text-xs text-muted-foreground hover:text-foreground">[back]</button>
             </div>
-            
-            <Form {...loginForm}>
-              <form onSubmit={loginForm.handleSubmit((data) => loginMutation.mutate({ data }))} className="space-y-4">
-                <FormField
-                  control={loginForm.control}
-                  name="username"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="text-xs uppercase tracking-wider text-muted-foreground">Identifier</FormLabel>
-                      <FormControl>
-                        <Input 
-                          placeholder="username" 
-                          className="bg-card border-border focus-visible:ring-primary font-mono rounded-none" 
-                          {...field} 
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={loginForm.control}
-                  name="password"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="text-xs uppercase tracking-wider text-muted-foreground">Passphrase</FormLabel>
-                      <FormControl>
-                        <Input 
-                          type="password" 
-                          placeholder="••••••••" 
-                          className="bg-card border-border focus-visible:ring-primary font-mono rounded-none" 
-                          {...field} 
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <Button 
-                  type="submit" 
-                  className="w-full rounded-none font-mono tracking-wider"
-                  disabled={loginMutation.isPending}
-                >
-                  {loginMutation.isPending ? "CONNECTING..." : "INITIALIZE_SESSION"}
-                </Button>
-              </form>
-            </Form>
-          </div>
 
-          {/* Vertical Divider */}
-          <div className="hidden md:flex flex-col items-center justify-center relative">
-            <div className="h-full w-px bg-border"></div>
-            <div className="absolute bg-background py-4 text-xs font-mono text-muted-foreground">OR</div>
-          </div>
+            <form onSubmit={registerForm.handleSubmit(data => registerMutation.mutate({ data }))} className="space-y-2">
+              <div>
+                <label className="text-xs text-muted-foreground block mb-0.5">username</label>
+                <input
+                  {...registerForm.register("username")}
+                  autoComplete="username"
+                  className="w-full bg-background border border-border px-2 py-1 text-sm text-foreground outline-none focus:border-primary placeholder:text-muted-foreground"
+                  placeholder="letters, numbers, _"
+                />
+                {registerForm.formState.errors.username && (
+                  <p className="text-xs text-destructive mt-0.5">{registerForm.formState.errors.username.message}</p>
+                )}
+              </div>
 
-          {/* Register Form */}
-          <div className="flex flex-col">
-            <div className="mb-6">
-              <h2 className="text-2xl font-bold text-white mb-2">Initialize</h2>
-              <p className="text-sm text-muted-foreground">Generate new identity</p>
+              <div>
+                <label className="text-xs text-muted-foreground block mb-0.5">password</label>
+                <input
+                  {...registerForm.register("password")}
+                  type="password"
+                  autoComplete="new-password"
+                  className="w-full bg-background border border-border px-2 py-1 text-sm text-foreground outline-none focus:border-primary placeholder:text-muted-foreground"
+                  placeholder="min 6 characters"
+                />
+                {registerForm.formState.errors.password && (
+                  <p className="text-xs text-destructive mt-0.5">{registerForm.formState.errors.password.message}</p>
+                )}
+              </div>
+
+              <button
+                type="submit"
+                disabled={registerMutation.isPending}
+                className="w-full border border-border px-2 py-1.5 text-sm text-foreground hover:bg-accent disabled:opacity-40 mt-1"
+              >
+                {registerMutation.isPending ? "creating..." : "[ Create Account ]"}
+              </button>
+            </form>
+          </div>
+        )}
+
+        {/* ── LOGIN ── */}
+        {mode === "login" && (
+          <div className="border border-border bg-card p-4">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-sm text-foreground">Login</span>
+              <button onClick={() => setMode("landing")} className="text-xs text-muted-foreground hover:text-foreground">[back]</button>
             </div>
-            
-            <Form {...registerForm}>
-              <form onSubmit={registerForm.handleSubmit((data) => registerMutation.mutate({ data }))} className="space-y-4">
-                <FormField
-                  control={registerForm.control}
-                  name="username"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="text-xs uppercase tracking-wider text-muted-foreground">New Identifier</FormLabel>
-                      <FormControl>
-                        <Input 
-                          placeholder="username" 
-                          className="bg-card border-border focus-visible:ring-primary font-mono rounded-none" 
-                          {...field} 
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
+
+            <form onSubmit={loginForm.handleSubmit(data => loginMutation.mutate({ data }))} className="space-y-2">
+              <div>
+                <label className="text-xs text-muted-foreground block mb-0.5">
+                  your ID
+                  {savedFriendToken && (
+                    <span className="ml-1 text-primary">(saved)</span>
                   )}
+                </label>
+                <input
+                  {...loginForm.register("id")}
+                  autoComplete="username"
+                  className="w-full bg-background border border-border px-2 py-1 text-sm text-foreground outline-none focus:border-primary placeholder:text-muted-foreground"
+                  placeholder="xx.xx.xx.xx"
                 />
-                <FormField
-                  control={registerForm.control}
-                  name="password"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="text-xs uppercase tracking-wider text-muted-foreground">New Passphrase</FormLabel>
-                      <FormControl>
-                        <Input 
-                          type="password" 
-                          placeholder="••••••••" 
-                          className="bg-card border-border focus-visible:ring-primary font-mono rounded-none" 
-                          {...field} 
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
+                {loginForm.formState.errors.id && (
+                  <p className="text-xs text-destructive mt-0.5">{loginForm.formState.errors.id.message}</p>
+                )}
+              </div>
+
+              <div>
+                <label className="text-xs text-muted-foreground block mb-0.5">password</label>
+                <input
+                  {...loginForm.register("password")}
+                  type="password"
+                  autoComplete="current-password"
+                  className="w-full bg-background border border-border px-2 py-1 text-sm text-foreground outline-none focus:border-primary placeholder:text-muted-foreground"
+                  placeholder="password"
+                />
+                {loginForm.formState.errors.password && (
+                  <p className="text-xs text-destructive mt-0.5">{loginForm.formState.errors.password.message}</p>
+                )}
+              </div>
+
+              <button
+                type="submit"
+                disabled={loginMutation.isPending}
+                className="w-full border border-border px-2 py-1.5 text-sm text-foreground hover:bg-accent disabled:opacity-40 mt-1"
+              >
+                {loginMutation.isPending ? "logging in..." : "[ Login ]"}
+              </button>
+            </form>
+
+            {/* Guest divider */}
+            <div className="mt-4 pt-3 border-t border-border">
+              <p className="text-xs text-muted-foreground mb-2">or enter without an account</p>
+
+              <form onSubmit={guestForm.handleSubmit(data => guestMutation.mutate({ data }))} className="space-y-2">
+                <div>
+                  <label className="text-xs text-muted-foreground block mb-0.5">display name</label>
+                  <input
+                    {...guestForm.register("displayName")}
+                    autoComplete="off"
+                    className="w-full bg-background border border-border px-2 py-1 text-sm text-foreground outline-none focus:border-primary placeholder:text-muted-foreground"
+                    placeholder="pick any name"
+                  />
+                  {guestForm.formState.errors.displayName && (
+                    <p className="text-xs text-destructive mt-0.5">{guestForm.formState.errors.displayName.message}</p>
                   )}
-                />
-                <Button 
-                  type="submit" 
-                  variant="outline"
-                  className="w-full rounded-none font-mono tracking-wider border-primary text-primary hover:bg-primary hover:text-primary-foreground"
-                  disabled={registerMutation.isPending}
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={guestMutation.isPending}
+                  className="w-full border border-border px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-accent disabled:opacity-40"
                 >
-                  {registerMutation.isPending ? "GENERATING..." : "GENERATE_IDENTITY"}
-                </Button>
+                  {guestMutation.isPending ? "entering..." : "[ Enter as Guest ]"}
+                </button>
               </form>
-            </Form>
+            </div>
           </div>
-        </div>
+        )}
+
       </div>
     </div>
   );

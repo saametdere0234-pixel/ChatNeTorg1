@@ -1,11 +1,6 @@
 import { useState } from "react";
 import { useAuthContext } from "@/hooks/use-auth-context";
 import { useGetFriends, useAddFriend, getGetFriendsQueryKey } from "@workspace/api-client-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { LogOut, Copy, Plus, Terminal, Hash, MessageSquareText } from "lucide-react";
 import { useAuthStore } from "@/store/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
@@ -19,6 +14,7 @@ interface SidebarProps {
 export function Sidebar({ currentTab, onSelectTab }: SidebarProps) {
   const { user } = useAuthContext();
   const setToken = useAuthStore(state => state.setToken);
+  const setSavedFriendToken = useAuthStore(state => state.setSavedFriendToken);
   const [_, setLocation] = useLocation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -27,40 +23,28 @@ export function Sidebar({ currentTab, onSelectTab }: SidebarProps) {
   const addFriendMutation = useAddFriend();
 
   const [addToken, setAddToken] = useState("");
-  const [addDialogOpen, setAddDialogOpen] = useState(false);
+  const [addOpen, setAddOpen] = useState(false);
 
   const handleCopyToken = () => {
     if (user?.friendToken) {
       navigator.clipboard.writeText(user.friendToken);
-      toast({
-        title: "TOKEN_COPIED",
-        description: "Your connection token is in the clipboard.",
-      });
+      toast({ title: "Copied", description: "Token copied to clipboard." });
     }
   };
 
   const handleAddFriend = (e: React.FormEvent) => {
     e.preventDefault();
     if (!addToken.trim()) return;
-
     addFriendMutation.mutate({ data: { token: addToken.trim() } }, {
       onSuccess: (newFriend) => {
-        toast({
-          title: "CONNECTION_ESTABLISHED",
-          description: `Connected to ${newFriend.label}`,
-        });
-        setAddDialogOpen(false);
+        setAddOpen(false);
         setAddToken("");
         queryClient.invalidateQueries({ queryKey: getGetFriendsQueryKey() });
         onSelectTab(newFriend.id, newFriend.label);
       },
       onError: () => {
-        toast({
-          variant: "destructive",
-          title: "CONNECTION_FAILED",
-          description: "Invalid or unknown token.",
-        });
-      }
+        toast({ variant: "destructive", title: "Failed", description: "Invalid or unknown token." });
+      },
     });
   };
 
@@ -70,135 +54,91 @@ export function Sidebar({ currentTab, onSelectTab }: SidebarProps) {
   };
 
   return (
-    <div className="w-80 flex flex-col h-full bg-card border-r border-border">
-      {/* Header Profile */}
-      <div className="p-6 border-b border-border bg-black/40">
-        <div className="flex items-center gap-3 mb-4 text-primary">
-          <Terminal className="w-5 h-5" />
-          <h1 className="text-xl font-bold tracking-tighter">ChatNet</h1>
-        </div>
-        
-        <div className="bg-background border border-border p-3 flex flex-col gap-2">
-          <div className="flex justify-between items-center">
-            <span className="text-xs font-mono text-muted-foreground uppercase">Identity</span>
-            <span className="text-xs font-mono font-bold text-white">{user?.username}</span>
-          </div>
-          
-          <div className="flex justify-between items-center group">
-            <span className="text-xs font-mono text-muted-foreground uppercase">Token</span>
-            <button 
-              onClick={handleCopyToken}
-              className="flex items-center gap-1 text-xs font-mono text-primary hover:text-white transition-colors"
-            >
-              {user?.friendToken}
-              <Copy className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
-            </button>
-          </div>
-        </div>
+    <div className="w-52 flex flex-col h-full bg-card border-r border-border font-mono text-xs">
+      {/* Logo */}
+      <div className="px-3 py-2 border-b border-border">
+        <span className="text-sm font-bold" style={{ color: 'var(--logo-chat)' }}>Chat</span>
+        <span className="text-sm font-bold" style={{ color: 'var(--logo-net)' }}>Net</span>
       </div>
 
-      <ScrollArea className="flex-1">
-        <div className="p-4 space-y-6">
-          {/* Channels */}
-          <div>
-            <h3 className="text-xs font-mono font-bold text-muted-foreground uppercase tracking-widest mb-3 px-2">Channels</h3>
+      {/* Identity */}
+      <div className="px-3 py-2 border-b border-border text-muted-foreground">
+        <div>id: <button onClick={handleCopyToken} className="text-foreground hover:text-primary">{user?.friendToken}</button></div>
+      </div>
+
+      {/* Channels */}
+      <div className="px-3 py-2 border-b border-border">
+        <div className="text-muted-foreground mb-1">channels</div>
+        <button
+          onClick={() => onSelectTab("general")}
+          className={`block w-full text-left px-1 py-0.5 ${
+            currentTab === "general" ? "text-primary" : "text-foreground hover:text-primary"
+          }`}
+        >
+          # general
+        </button>
+      </div>
+
+      {/* Friends */}
+      <div className="px-3 py-2 flex-1 overflow-y-auto">
+        <div className="flex items-center justify-between mb-1">
+          <span className="text-muted-foreground">friends</span>
+          <button
+            onClick={() => setAddOpen(v => !v)}
+            className="text-muted-foreground hover:text-primary"
+            title="Add friend by token"
+          >
+            [+]
+          </button>
+        </div>
+
+        {addOpen && (
+          <form onSubmit={handleAddFriend} className="mb-2">
+            <input
+              value={addToken}
+              onChange={e => setAddToken(e.target.value)}
+              placeholder="xx.xx.xx.xx"
+              maxLength={11}
+              className="w-full bg-background border border-border px-1 py-0.5 text-xs font-mono text-foreground outline-none mb-1 placeholder:text-muted-foreground"
+            />
             <button
-              onClick={() => onSelectTab("general")}
-              className={`w-full flex items-center gap-3 px-3 py-2 text-sm font-mono transition-colors rounded-none border border-transparent ${
-                currentTab === "general" 
-                  ? "bg-primary/10 text-primary border-primary/30" 
-                  : "text-muted-foreground hover:text-white hover:bg-white/5"
+              type="submit"
+              disabled={addFriendMutation.isPending || !addToken.trim()}
+              className="text-xs text-muted-foreground hover:text-foreground disabled:opacity-40"
+            >
+              {addFriendMutation.isPending ? "adding..." : "[add]"}
+            </button>
+          </form>
+        )}
+
+        {friends.length === 0 ? (
+          <div className="text-muted-foreground">none</div>
+        ) : (
+          friends.map((friend) => (
+            <button
+              key={friend.id}
+              onClick={() => onSelectTab(friend.id, friend.label)}
+              className={`block w-full text-left px-1 py-0.5 ${
+                currentTab === friend.id ? "text-primary" : "text-foreground hover:text-primary"
               }`}
             >
-              <Hash className="w-4 h-4" />
-              General
+              {friend.label}
+              {friend.unreadCount && friend.unreadCount > 0 ? (
+                <span className="ml-1 text-primary">[{friend.unreadCount}]</span>
+              ) : null}
             </button>
-          </div>
+          ))
+        )}
+      </div>
 
-          {/* Direct Connections */}
-          <div>
-            <div className="flex items-center justify-between mb-3 px-2">
-              <h3 className="text-xs font-mono font-bold text-muted-foreground uppercase tracking-widest">Connections</h3>
-              <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
-                <DialogTrigger asChild>
-                  <button className="text-primary hover:text-primary-foreground hover:bg-primary rounded-none p-1 transition-colors">
-                    <Plus className="w-4 h-4" />
-                  </button>
-                </DialogTrigger>
-                <DialogContent className="bg-card border-border rounded-none sm:max-w-md">
-                  <DialogHeader>
-                    <DialogTitle className="font-mono text-primary uppercase tracking-widest flex items-center gap-2">
-                      <Terminal className="w-5 h-5" />
-                      Add_Connection
-                    </DialogTitle>
-                  </DialogHeader>
-                  <form onSubmit={handleAddFriend} className="space-y-4 pt-4">
-                    <div className="space-y-2">
-                      <label className="text-xs font-mono text-muted-foreground uppercase tracking-widest">
-                        Enter Target Token
-                      </label>
-                      <Input
-                        value={addToken}
-                        onChange={(e) => setAddToken(e.target.value)}
-                        placeholder="xx.xx.xx.xx"
-                        className="font-mono bg-background border-border focus-visible:ring-primary rounded-none h-12 text-center text-lg tracking-widest"
-                        maxLength={11}
-                      />
-                    </div>
-                    <Button 
-                      type="submit" 
-                      className="w-full font-mono rounded-none tracking-widest"
-                      disabled={addFriendMutation.isPending || !addToken.trim()}
-                    >
-                      {addFriendMutation.isPending ? "ESTABLISHING..." : "CONNECT"}
-                    </Button>
-                  </form>
-                </DialogContent>
-              </Dialog>
-            </div>
-
-            <div className="space-y-1">
-              {friends.length === 0 ? (
-                <div className="px-3 py-4 text-xs font-mono text-muted-foreground/50 border border-dashed border-border/50 text-center">
-                  NO_CONNECTIONS_FOUND
-                </div>
-              ) : (
-                friends.map((friend) => (
-                  <button
-                    key={friend.id}
-                    onClick={() => onSelectTab(friend.id, friend.label)}
-                    className={`w-full flex items-center justify-between px-3 py-2 text-sm font-mono transition-colors rounded-none border border-transparent group ${
-                      currentTab === friend.id
-                        ? "bg-primary/10 text-white border-primary/30"
-                        : "text-muted-foreground hover:text-white hover:bg-white/5"
-                    }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <MessageSquareText className={`w-4 h-4 ${currentTab === friend.id ? "text-primary" : ""}`} />
-                      {friend.label}
-                    </div>
-                    {friend.unreadCount && friend.unreadCount > 0 ? (
-                      <span className="bg-primary text-primary-foreground text-[10px] px-1.5 min-w-[20px] text-center font-bold">
-                        {friend.unreadCount}
-                      </span>
-                    ) : null}
-                  </button>
-                ))
-              )}
-            </div>
-          </div>
-        </div>
-      </ScrollArea>
-
-      <div className="p-4 border-t border-border mt-auto">
-        <Button 
-          variant="outline" 
+      {/* Logout */}
+      <div className="px-3 py-2 border-t border-border">
+        <button
           onClick={handleLogout}
-          className="w-full rounded-none font-mono text-xs text-muted-foreground border-border hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30 justify-start"
+          className="text-muted-foreground hover:text-destructive text-xs"
         >
-          <LogOut className="w-4 h-4 mr-2" />
-          TERMINATE_SESSION
-        </Button>
+          [logout]
+        </button>
       </div>
     </div>
   );

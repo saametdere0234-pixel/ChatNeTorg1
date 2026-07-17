@@ -44,10 +44,31 @@ export const RegisterResponse = zod.object({
 
 
 /**
+ * @summary Enter as an anonymous guest with a chosen display name
+ */
+export const guestLoginBodyDisplayNameMax = 30;
+
+
+
+export const GuestLoginBody = zod.object({
+  "displayName": zod.string().min(1).max(guestLoginBodyDisplayNameMax)
+})
+
+export const GuestLoginResponse = zod.object({
+  "token": zod.string(),
+  "user": zod.object({
+  "id": zod.string(),
+  "username": zod.string(),
+  "friendToken": zod.string().describe('8-digit token in xx.xx.xx.xx format')
+})
+})
+
+
+/**
  * @summary Login
  */
 export const LoginBody = zod.object({
-  "username": zod.string(),
+  "id": zod.string().describe('8-digit friend token (xx.xx.xx.xx format)'),
   "password": zod.string()
 })
 

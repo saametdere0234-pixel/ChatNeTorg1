@@ -6,8 +6,10 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface LoginInput {
-  /** 8-digit friend token (xx.xx.xx.xx format) */
-  id: string;
-  password: string;
+export interface GuestLoginInput {
+  /**
+     * @minLength 1
+     * @maxLength 30
+     */
+  displayName: string;
 }

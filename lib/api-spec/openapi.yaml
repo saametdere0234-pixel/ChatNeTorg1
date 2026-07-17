@@ -51,6 +51,27 @@ paths:
         "409":
           description: Username already taken
 
+  /auth/guest:
+    post:
+      operationId: guestLogin
+      tags: [auth]
+      summary: Enter as an anonymous guest with a chosen display name
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GuestLoginInput"
+      responses:
+        "201":
+          description: Guest session created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          description: Invalid display name
+
   /auth/login:
     post:
       operationId: login
@@ -218,12 +239,22 @@ components:
 
     LoginInput:
       type: object
-      required: [username, password]
+      required: [id, password]
       properties:
-        username:
+        id:
           type: string
+          description: "8-digit friend token (xx.xx.xx.xx format)"
         password:
           type: string
+
+    GuestLoginInput:
+      type: object
+      required: [displayName]
+      properties:
+        displayName:
+          type: string
+          minLength: 1
+          maxLength: 30
 
     AuthResponse:
       type: object

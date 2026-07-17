@@ -2,10 +2,6 @@ import { useEffect, useRef, useState } from "react";
 import { format } from "date-fns";
 import { useGetFriendMessages, useMarkSeen, getGetFriendMessagesQueryKey, getGetFriendsQueryKey } from "@workspace/api-client-react";
 import { useSocketStore } from "@/store/use-socket";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { Check, CheckCheck, Send } from "lucide-react";
 import { useAuthContext } from "@/hooks/use-auth-context";
 import { useQueryClient } from "@tanstack/react-query";
 
@@ -18,15 +14,15 @@ export function DmChat({ friendId, friendLabel }: DmChatProps) {
   const { data: messages = [], isLoading } = useGetFriendMessages(friendId, {
     query: {
       enabled: !!friendId,
-      queryKey: getGetFriendMessagesQueryKey(friendId)
-    }
+      queryKey: getGetFriendMessagesQueryKey(friendId),
+    },
   });
   const markSeenMutation = useMarkSeen();
   const queryClient = useQueryClient();
-  
+
   const [content, setContent] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
-  
+
   const { user } = useAuthContext();
   const joinDm = useSocketStore(state => state.joinDm);
   const leaveDm = useSocketStore(state => state.leaveDm);
@@ -50,10 +46,8 @@ export function DmChat({ friendId, friendLabel }: DmChatProps) {
     }
   }, [messages]);
 
-  // Mark as seen when new messages arrive
   useEffect(() => {
     if (!friendId || messages.length === 0) return;
-    
     const unseenFromFriend = messages.filter(m => !m.fromMe && !m.seenAt);
     if (unseenFromFriend.length > 0) {
       markSeenMutation.mutate({ friendId }, {
@@ -61,15 +55,14 @@ export function DmChat({ friendId, friendLabel }: DmChatProps) {
           queryClient.invalidateQueries({ queryKey: getGetFriendMessagesQueryKey(friendId) });
           queryClient.invalidateQueries({ queryKey: getGetFriendsQueryKey() });
           emitDmSeen(friendId);
-        }
+        },
       });
     }
-  }, [friendId, messages, markSeenMutation, queryClient, emitDmSeen]);
+  }, [friendId, messages]);
 
   const handleSend = (e: React.FormEvent) => {
     e.preventDefault();
     if (!content.trim() || !friendId) return;
-    
     sendDmMessage(friendId, content.trim());
     setContent("");
     emitStopTyping(friendId);
@@ -78,9 +71,7 @@ export function DmChat({ friendId, friendLabel }: DmChatProps) {
 
   const handleTyping = (e: React.ChangeEvent<HTMLInputElement>) => {
     setContent(e.target.value);
-    
     emitTyping(friendId);
-    
     if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
     typingTimeoutRef.current = setTimeout(() => {
       emitStopTyping(friendId);
@@ -92,94 +83,79 @@ export function DmChat({ friendId, friendLabel }: DmChatProps) {
   if (!friendId) return null;
 
   return (
-    <div className="flex flex-col h-full bg-background relative">
-      <div className="absolute inset-0 pointer-events-none opacity-[0.02] bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0IiBoZWlnaHQ9IjQiPjxyZWN0IHdpZHRoPSI0IiBoZWlnaHQ9IjQiIGZpbGw9IiNmZmYiIGZpbGwtb3BhY2l0eT0iMC4wNSIvPjxwYXRoIGQ9Ik0wIDBINHYxSDB6bTAgMkg0djFIMHoiIGZpbGw9IiMwMDAiIGZpbGwtb3BhY2l0eT0iMC4xIi8+PC9zdmc+')]"></div>
-      
-      <div className="px-6 py-4 border-b border-border flex items-center justify-between bg-card z-10">
-        <div>
-          <h2 className="text-lg font-bold text-white tracking-widest uppercase">{friendLabel}</h2>
-          <p className="text-xs text-muted-foreground font-mono">SECURE_TUNNEL_ESTABLISHED</p>
-        </div>
+    <div className="flex flex-col h-full bg-background">
+      {/* DM header */}
+      <div className="px-3 py-1.5 border-b border-border bg-card flex items-center justify-between">
+        <span className="text-xs font-mono text-foreground">{friendLabel}</span>
+        <span className="text-xs font-mono text-muted-foreground">private</span>
       </div>
 
-      <ScrollArea className="flex-1 p-6 z-10" viewportRef={scrollRef}>
-        <div className="space-y-6 max-w-4xl mx-auto">
-          {isLoading ? (
-            <div className="text-muted-foreground font-mono text-sm animate-pulse">
-              {'>'} DECRYPTING_LOGS...
-            </div>
-          ) : messages.length === 0 ? (
-            <div className="text-muted-foreground font-mono text-sm">
-              {'>'} SECURE_CHANNEL_OPEN.
-            </div>
-          ) : (
-            messages.map((msg) => {
-              return (
-                <div key={msg.id} className={`flex flex-col ${msg.fromMe ? "items-end" : "items-start"}`}>
-                  <div className="flex items-baseline gap-2 mb-1">
-                    <span className={`text-xs font-mono font-bold ${msg.fromMe ? "text-primary" : "text-white"}`}>
-                      {msg.fromMe ? "YOU" : friendLabel}
+      {/* Messages */}
+      <div
+        ref={scrollRef}
+        className="flex-1 overflow-y-auto px-3 py-2 font-mono text-sm"
+      >
+        {isLoading ? (
+          <p className="text-muted-foreground text-xs">loading...</p>
+        ) : messages.length === 0 ? (
+          <p className="text-muted-foreground text-xs">no messages yet.</p>
+        ) : (
+          messages.map((msg, index) => {
+            const prevMsg = messages[index - 1];
+            const showHeader = !prevMsg || prevMsg.fromMe !== msg.fromMe;
+
+            return (
+              <div key={msg.id} className={showHeader && index > 0 ? "mt-3" : "mt-0"}>
+                {showHeader && (
+                  <div className="flex items-baseline gap-2 mb-0.5">
+                    <span className={`text-xs font-bold ${msg.fromMe ? "text-primary" : "text-foreground"}`}>
+                      {msg.fromMe ? "you" : friendLabel}
                     </span>
-                    <span className="text-[10px] font-mono text-muted-foreground">
-                      {format(new Date(msg.createdAt), "HH:mm:ss")}
+                    <span className="text-[10px] text-muted-foreground">
+                      {format(new Date(msg.createdAt), "HH:mm")}
                     </span>
-                  </div>
-                  
-                  <div className={`
-                    max-w-[80%] px-4 py-2 text-sm rounded-none border relative group
-                    ${msg.fromMe 
-                      ? "bg-primary/10 border-primary/30 text-white" 
-                      : "bg-card border-border text-white"}
-                  `}>
-                    <p className="whitespace-pre-wrap break-words">{msg.content}</p>
-                    
+                    {/* Read receipt — only on DMs, only on your messages */}
                     {msg.fromMe && (
-                      <div className="absolute -left-6 bottom-1 flex gap-0.5">
-                        {msg.seenAt ? (
-                          <CheckCheck className="w-4 h-4 text-primary" />
-                        ) : (
-                          <Check className="w-3 h-3 text-muted-foreground" />
-                        )}
-                      </div>
+                      <span className="text-[10px] text-muted-foreground">
+                        {msg.seenAt ? "seen" : ""}
+                      </span>
                     )}
                   </div>
-                </div>
-              )
-            })
-          )}
-        </div>
-      </ScrollArea>
+                )}
+                <p className="text-sm text-foreground whitespace-pre-wrap break-words leading-snug">
+                  {msg.content}
+                </p>
+              </div>
+            );
+          })
+        )}
+      </div>
 
-      <div className="p-4 bg-card border-t border-border z-10">
-        <div className="max-w-4xl mx-auto">
-          <div className="h-6 flex items-center mb-2 px-2">
-            {isFriendTyping && (
-              <span className="text-xs font-mono text-muted-foreground animate-pulse">
-                {'>'} {friendLabel} is typing...
-              </span>
-            )}
+      {/* Typing + input */}
+      <div className="border-t border-border bg-card">
+        {isFriendTyping && (
+          <div className="px-3 pt-1 text-[10px] text-muted-foreground font-mono">
+            {friendLabel} is typing...
           </div>
-          <form onSubmit={handleSend} className="flex gap-2">
-            <div className="relative flex-1 group">
-              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-primary font-mono group-focus-within:animate-pulse">
-                {'>'}
-              </span>
-              <Input 
-                value={content}
-                onChange={handleTyping}
-                placeholder="TRANSMIT_MESSAGE..." 
-                className="pl-8 bg-background border-border focus-visible:ring-primary font-mono rounded-none h-12"
-              />
-            </div>
-            <Button 
-              type="submit" 
-              disabled={!content.trim()}
-              className="h-12 w-12 p-0 rounded-none bg-primary text-primary-foreground hover:bg-primary/80"
-            >
-              <Send className="w-5 h-5" />
-            </Button>
-          </form>
-        </div>
+        )}
+        <form onSubmit={handleSend} className="flex gap-0">
+          <span className="px-2 flex items-center text-muted-foreground font-mono text-sm border-r border-border">
+            {'>'}
+          </span>
+          <input
+            value={content}
+            onChange={handleTyping}
+            placeholder="type a message..."
+            className="flex-1 bg-transparent px-2 py-2 text-sm font-mono text-foreground outline-none placeholder:text-muted-foreground"
+          />
+          <button
+            type="submit"
+            disabled={!content.trim()}
+            className="px-3 py-2 text-xs font-mono border-l border-border text-muted-foreground hover:text-foreground disabled:opacity-30"
+          >
+            send
+          </button>
+        </form>
       </div>
     </div>
   );

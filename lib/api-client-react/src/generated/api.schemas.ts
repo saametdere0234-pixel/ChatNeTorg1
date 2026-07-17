@@ -21,8 +21,17 @@ export interface RegisterInput {
 }
 
 export interface LoginInput {
-  username: string;
+  /** 8-digit friend token (xx.xx.xx.xx format) */
+  id: string;
   password: string;
+}
+
+export interface GuestLoginInput {
+  /**
+     * @minLength 1
+     * @maxLength 30
+     */
+  displayName: string;
 }
 
 export interface AuthUser {

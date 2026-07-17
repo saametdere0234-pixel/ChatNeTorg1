@@ -13,6 +13,7 @@ export * from './directMessage';
 export * from './friend';
 export * from './generalMessage';
 export * from './getGeneralMessagesParams';
+export * from './guestLoginInput';
 export * from './healthStatus';
 export * from './loginInput';
 export * from './registerInput';

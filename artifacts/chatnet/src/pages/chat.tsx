@@ -4,7 +4,6 @@ import { useAuthContext } from "@/hooks/use-auth-context";
 import { Sidebar } from "@/components/chat/sidebar";
 import { GeneralChat } from "@/components/chat/general-chat";
 import { DmChat } from "@/components/chat/dm-chat";
-import { Terminal } from "lucide-react";
 
 export default function ChatLayout() {
   const { isAuthenticated, isLoading, isSocketConnected } = useAuthContext();
@@ -20,9 +19,8 @@ export default function ChatLayout() {
 
   if (isLoading || !isAuthenticated) {
     return (
-      <div className="min-h-screen w-full flex flex-col items-center justify-center bg-background text-primary font-mono">
-        <Terminal className="w-12 h-12 mb-4 animate-pulse" />
-        <p className="tracking-widest">{'>'} INITIALIZING_SYSTEM...</p>
+      <div className="min-h-screen w-full flex flex-col items-center justify-center bg-background text-foreground font-mono text-sm">
+        <p>connecting...</p>
       </div>
     );
   }
@@ -33,16 +31,15 @@ export default function ChatLayout() {
   };
 
   return (
-    <div className="h-screen w-full flex bg-background overflow-hidden selection:bg-primary selection:text-primary-foreground">
-      {/* Disconnected Banner */}
+    <div className="h-screen w-full flex bg-background overflow-hidden">
       {!isSocketConnected && (
-        <div className="absolute top-0 left-0 right-0 bg-destructive text-destructive-foreground text-xs font-mono font-bold text-center py-1 z-50">
-          CONNECTION_LOST. ATTEMPTING_RECONNECT...
+        <div className="absolute top-0 left-0 right-0 bg-destructive text-destructive-foreground text-xs font-mono text-center py-0.5 z-50">
+          connection lost — reconnecting...
         </div>
       )}
 
       <Sidebar currentTab={currentTab} onSelectTab={handleSelectTab} />
-      
+
       <main className="flex-1 min-w-0 relative">
         {currentTab === "general" ? (
           <GeneralChat />

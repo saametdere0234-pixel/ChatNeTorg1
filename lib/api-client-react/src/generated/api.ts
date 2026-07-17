@@ -27,6 +27,7 @@ import type {
   Friend,
   GeneralMessage,
   GetGeneralMessagesParams,
+  GuestLoginInput,
   HealthStatus,
   LoginInput,
   RegisterInput,
@@ -206,6 +207,77 @@ export const useRegister = <TError = ErrorType<void>,
         TContext
       > => {
       return useMutation(getRegisterMutationOptions(options));
+    }
+
+export const getGuestLoginUrl = () => {
+
+
+
+
+  return `/api/auth/guest`
+}
+
+/**
+ * @summary Enter as an anonymous guest with a chosen display name
+ */
+export const guestLogin = async (guestLoginInput: GuestLoginInput, options?: RequestInit): Promise<AuthResponse> => {
+
+  return customFetch<AuthResponse>(getGuestLoginUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(guestLoginInput)
+  }
+);}
+
+
+
+
+
+export const getGuestLoginMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof guestLogin>>, TError,{data: BodyType<GuestLoginInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof guestLogin>>, TError,{data: BodyType<GuestLoginInput>}, TContext> => {
+
+const mutationKey = ['guestLogin'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof guestLogin>>, {data: BodyType<GuestLoginInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  guestLogin(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type GuestLoginMutationResult = NonNullable<Awaited<ReturnType<typeof guestLogin>>>
+    export type GuestLoginMutationBody = BodyType<GuestLoginInput>
+    export type GuestLoginMutationError = ErrorType<void>
+
+    /**
+ * @summary Enter as an anonymous guest with a chosen display name
+ */
+export const useGuestLogin = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof guestLogin>>, TError,{data: BodyType<GuestLoginInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof guestLogin>>,
+        TError,
+        {data: BodyType<GuestLoginInput>},
+        TContext
+      > => {
+      return useMutation(getGuestLoginMutationOptions(options));
     }
 
 export const getLoginUrl = () => {
