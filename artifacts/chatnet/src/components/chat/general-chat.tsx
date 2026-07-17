@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { format } from "date-fns";
 import {
   useGetGeneralMessages,
+  getGetGeneralMessagesQueryKey,
   useGetFriends,
   getGetFriendsQueryKey,
   addFriend,
@@ -115,6 +116,18 @@ export function GeneralChat() {
   const [ctxMenu, setCtxMenu] = useState<MsgCtxMenu | null>(null);
   const [imgCtxMenu, setImgCtxMenu] = useState<ImgCtxMenu | null>(null);
   const [blockPicker, setBlockPicker] = useState<BlockPickerMenu | null>(null);
+
+  // When storage is OFF, guarantee a clean slate on every login by wiping any
+  // residual messages that socket events from a previous session may have left in
+  // the React Query cache (queryClient.clear() on logout is best-effort, but
+  // socket events can race it).  Runs synchronously before the first render
+  // populates the message list.
+  useEffect(() => {
+    if (!storageEnabled) {
+      queryClient.setQueryData(getGetGeneralMessagesQueryKey(), []);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // mount only — intentional
 
   useEffect(() => {
     joinGeneral();
