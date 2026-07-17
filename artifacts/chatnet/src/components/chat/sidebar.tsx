@@ -32,7 +32,6 @@ export function Sidebar({ currentTab, onSelectTab }: SidebarProps) {
   const setToken = useAuthStore(state => state.setToken);
   const storageEnabled = useAuthStore(state => state.storageEnabled);
   const setStorageEnabled = useAuthStore(state => state.setStorageEnabled);
-  const clearAllData = useAuthStore(state => state.clearAllData);
   const emitNameUpdate = useSocketStore(state => state.emitNameUpdate);
   const userLabels = useSocketStore(state => state.userLabels);
   const [_, setLocation] = useLocation();
@@ -54,9 +53,6 @@ export function Sidebar({ currentTab, onSelectTab }: SidebarProps) {
 
   // Logout confirm
   const [logoutConfirm, setLogoutConfirm] = useState(false);
-
-  // Clear data confirm
-  const [clearConfirm, setClearConfirm] = useState(false);
 
   // Quiet mode is on user object
   const quietMode = user?.quietMode ?? false;
@@ -129,12 +125,6 @@ export function Sidebar({ currentTab, onSelectTab }: SidebarProps) {
 
   const toggleStorage = () => {
     setStorageEnabled(!storageEnabled);
-  };
-
-  const handleClearData = () => {
-    clearAllData();
-    setClearConfirm(false);
-    setLocation("/auth");
   };
 
   const handleRemoveFriend = (friendId: string, friendLabel: string) => {
@@ -288,23 +278,6 @@ export function Sidebar({ currentTab, onSelectTab }: SidebarProps) {
         >
           {storageEnabled ? "[storage: on]" : "[storage: off]"}
         </button>
-        <div className="mt-1">
-          {clearConfirm ? (
-            <span className="text-xs text-foreground">
-              clear all?{" "}
-              <button onClick={handleClearData} className="text-destructive hover:underline">yes</button>
-              {" / "}
-              <button onClick={() => setClearConfirm(false)} className="text-muted-foreground hover:text-foreground">no</button>
-            </span>
-          ) : (
-            <button
-              onClick={() => setClearConfirm(true)}
-              className="text-xs text-muted-foreground hover:text-destructive"
-            >
-              [clear data]
-            </button>
-          )}
-        </div>
       </div>
 
       {/* Quiet Mode */}
