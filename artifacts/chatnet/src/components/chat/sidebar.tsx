@@ -115,10 +115,21 @@ export function Sidebar({ currentTab, onSelectTab }: SidebarProps) {
   };
 
   const toggleQuietMode = () => {
+    const next = !quietMode;
+    // Optimistic update — flip immediately in the cache so the UI responds at once
+    queryClient.setQueryData(getGetMeQueryKey(), (old: typeof user) =>
+      old ? { ...old, quietMode: next } : old
+    );
     updateMeMutation.mutate(
-      { data: { quietMode: !quietMode } },
+      { data: { quietMode: next } },
       {
         onSuccess: () => queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() }),
+        onError: () => {
+          // Revert on failure
+          queryClient.setQueryData(getGetMeQueryKey(), (old: typeof user) =>
+            old ? { ...old, quietMode: !next } : old
+          );
+        },
       }
     );
   };
