@@ -163,6 +163,10 @@ export function Sidebar({ currentTab, onSelectTab }: SidebarProps) {
     // Completely wipe all session state so the next account starts fresh
     setToken(null);
     queryClient.clear(); // purge all React Query cache (user, messages, friends)
+    // When storage is off, also wipe any locally persisted chat history
+    if (!storageEnabled) {
+      localStorage.removeItem('chatnet_general_messages');
+    }
     setLocation("/auth");
   };
 
@@ -230,16 +234,18 @@ export function Sidebar({ currentTab, onSelectTab }: SidebarProps) {
       <div className="px-3 py-2 flex-1 overflow-y-auto border-b border-border">
         <div className="flex items-center justify-between mb-1">
           <span className="text-muted-foreground">friends</span>
-          <button
-            onClick={() => setAddOpen(v => !v)}
-            className="text-muted-foreground hover:text-primary"
-            title="Add friend by token"
-          >
-            [+]
-          </button>
+          {!user?.isGuest && (
+            <button
+              onClick={() => setAddOpen(v => !v)}
+              className="text-muted-foreground hover:text-primary"
+              title="Add friend by token"
+            >
+              [+]
+            </button>
+          )}
         </div>
 
-        {addOpen && (
+        {!user?.isGuest && addOpen && (
           <form onSubmit={handleAddFriend} className="mb-2">
             <input
               value={addToken}

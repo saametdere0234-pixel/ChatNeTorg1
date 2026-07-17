@@ -1,7 +1,8 @@
 import { create } from 'zustand';
 
 // All localStorage keys used by ChatNet
-const STORAGE_KEYS = ['chatnet_token', 'chatnet_friend_token'];
+export const GENERAL_MESSAGES_CACHE_KEY = 'chatnet_general_messages';
+const STORAGE_KEYS = ['chatnet_token', 'chatnet_friend_token', GENERAL_MESSAGES_CACHE_KEY];
 const STORAGE_ENABLED_KEY = 'chatnet_storage_enabled';
 
 interface AuthStore {

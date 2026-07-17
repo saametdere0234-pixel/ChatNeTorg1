@@ -111,8 +111,8 @@ export function DmChat({ friendId, friendLabel }: DmChatProps) {
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (!["image/jpeg", "image/png"].includes(file.type)) {
-      toast({ variant: "destructive", title: "Invalid type", description: "Only JPG and PNG files are supported." });
+    if (!file.type.startsWith("image/")) {
+      toast({ variant: "destructive", title: "Invalid type", description: "Only image files are supported." });
       e.target.value = "";
       return;
     }
@@ -221,7 +221,7 @@ export function DmChat({ friendId, friendLabel }: DmChatProps) {
           <input
             ref={fileInputRef}
             type="file"
-            accept=".jpg,.jpeg,.png,image/jpeg,image/png"
+            accept="image/*"
             className="hidden"
             onChange={handleImageSelect}
           />

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { format } from "date-fns";
 import {
   useGetGeneralMessages,
@@ -8,6 +8,7 @@ import {
 } from "@workspace/api-client-react";
 import { useSocketStore } from "@/store/use-socket";
 import { useAuthContext } from "@/hooks/use-auth-context";
+import { useAuthStore, GENERAL_MESSAGES_CACHE_KEY } from "@/store/use-auth";
 import { ContextMenuOverlay } from "@/components/ui/context-menu-overlay";
 import { ImageLightbox } from "@/components/ui/image-lightbox";
 import { useToast } from "@/hooks/use-toast";
@@ -64,7 +65,23 @@ function truncate(text: string, max = 40) {
 }
 
 export function GeneralChat() {
-  const { data: messages = [], isLoading } = useGetGeneralMessages();
+  const storageEnabled = useAuthStore(s => s.storageEnabled);
+
+  // Load persisted messages from localStorage as initial data when storage is on
+  const cachedMessages = useMemo(() => {
+    if (!storageEnabled) return undefined;
+    try {
+      const raw = localStorage.getItem(GENERAL_MESSAGES_CACHE_KEY);
+      return raw ? JSON.parse(raw) : undefined;
+    } catch {
+      return undefined;
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // intentionally run once on mount
+
+  const { data: messages = [], isLoading } = useGetGeneralMessages({
+    query: { initialData: cachedMessages },
+  });
   const { data: friends = [] } = useGetFriends();
   const [content, setContent] = useState("");
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
@@ -96,6 +113,14 @@ export function GeneralChat() {
     return () => leaveGeneral();
   }, [joinGeneral, leaveGeneral]);
 
+  // Persist messages to localStorage whenever they update (storage on only)
+  useEffect(() => {
+    if (!storageEnabled || messages.length === 0) return;
+    try {
+      localStorage.setItem(GENERAL_MESSAGES_CACHE_KEY, JSON.stringify(messages));
+    } catch { /* quota exceeded or private browsing — ignore */ }
+  }, [messages, storageEnabled]);
+
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -123,8 +148,8 @@ export function GeneralChat() {
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (!["image/jpeg", "image/png"].includes(file.type)) {
-      toast({ variant: "destructive", title: "Invalid type", description: "Only JPG and PNG files are supported." });
+    if (!file.type.startsWith("image/")) {
+      toast({ variant: "destructive", title: "Invalid type", description: "Only image files are supported." });
       e.target.value = "";
       return;
     }
@@ -274,7 +299,7 @@ export function GeneralChat() {
           <input
             ref={fileInputRef}
             type="file"
-            accept=".jpg,.jpeg,.png,image/jpeg,image/png"
+            accept="image/*"
             className="hidden"
             onChange={handleImageSelect}
           />
