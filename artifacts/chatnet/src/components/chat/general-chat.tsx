@@ -101,7 +101,9 @@ export function GeneralChat() {
   const typingState       = useSocketStore(s => s.typingState);
   const userLabels        = useSocketStore(s => s.userLabels);
 
-  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const typingTimeoutRef  = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const longPressTimer    = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const longPressPos      = useRef({ x: 0, y: 0 });
   const [ctxMenu, setCtxMenu]         = useState<MsgCtxMenu | null>(null);
   const [imgCtxMenu, setImgCtxMenu]   = useState<ImgCtxMenu | null>(null);
   const [blockPicker, setBlockPicker] = useState<BlockPickerMenu | null>(null);
@@ -219,23 +221,24 @@ export function GeneralChat() {
     return block;
   };
 
-  const handleSenderContextMenu = (
-    e: React.MouseEvent,
+  // Open sender context menu — called from both desktop right-click and mobile tap
+  const openSenderMenu = (
+    x: number,
+    y: number,
     index: number,
     senderId: string,
     senderLabel: string,
     senderToken: string | null,
   ) => {
-    e.preventDefault();
     const isOwn = senderId === user?.id;
     const blockMessages = isOwn ? getBlock(index) : [];
     const topMessageId = messages[index]?.id ?? "";
-    setCtxMenu({ x: e.clientX, y: e.clientY, senderId, senderLabel, senderToken, isOwn, blockMessages, topMessageId });
+    setCtxMenu({ x, y, senderId, senderLabel, senderToken, isOwn, blockMessages, topMessageId });
   };
 
-  const handleImageContextMenu = (e: React.MouseEvent, src: string) => {
-    e.preventDefault();
-    setImgCtxMenu({ x: e.clientX, y: e.clientY, src });
+  // Open image context menu — called from desktop right-click and mobile long-press
+  const openImageMenu = (x: number, y: number, src: string) => {
+    setImgCtxMenu({ x, y, src });
   };
 
   const handleAddFromCtx = (token: string, label: string) => {
@@ -280,7 +283,8 @@ export function GeneralChat() {
                   <div className="flex items-baseline gap-2 mb-0.5">
                     <span
                       className={`text-xs font-bold ${isMe ? "text-primary cursor-pointer hover:text-primary/70" : "text-foreground hover:text-primary cursor-pointer"}`}
-                      onContextMenu={(e) => handleSenderContextMenu(e, index, msg.senderId, liveLabel, (msg as { senderToken?: string | null }).senderToken ?? null)}
+                      onClick={(e) => openSenderMenu(e.clientX, e.clientY, index, msg.senderId, liveLabel, (msg as { senderToken?: string | null }).senderToken ?? null)}
+                      onContextMenu={(e) => { e.preventDefault(); openSenderMenu(e.clientX, e.clientY, index, msg.senderId, liveLabel, (msg as { senderToken?: string | null }).senderToken ?? null); }}
                     >
                       {liveLabel}
                     </span>
@@ -294,10 +298,17 @@ export function GeneralChat() {
                     src={imgSrc(msg.content)}
                     alt="shared image"
                     className="max-w-[200px] sm:max-w-xs max-h-48 border border-border mt-0.5 cursor-pointer hover:opacity-80"
-                    style={{ display: "block" }}
+                    style={{ display: "block", WebkitTouchCallout: "none" }}
                     onClick={() => setLightboxSrc(imgSrc(msg.content))}
-                    onContextMenu={(e) => handleImageContextMenu(e, imgSrc(msg.content))}
-                    title="Click to view · Right-click to download"
+                    onContextMenu={(e) => { e.preventDefault(); openImageMenu(e.clientX, e.clientY, imgSrc(msg.content)); }}
+                    onTouchStart={(e) => {
+                      const t = e.touches[0];
+                      longPressPos.current = { x: t.clientX, y: t.clientY };
+                      longPressTimer.current = setTimeout(() => openImageMenu(longPressPos.current.x, longPressPos.current.y, imgSrc(msg.content)), 500);
+                    }}
+                    onTouchEnd={() => clearTimeout(longPressTimer.current)}
+                    onTouchMove={() => clearTimeout(longPressTimer.current)}
+                    title="Tap to view · Long-press or right-click to download"
                   />
                 ) : (
                   <p className="text-sm text-foreground whitespace-pre-wrap break-words leading-snug pl-0">

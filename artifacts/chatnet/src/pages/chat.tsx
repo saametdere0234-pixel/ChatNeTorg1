@@ -69,13 +69,15 @@ export default function ChatLayout() {
         <div className="md:hidden flex items-center gap-2 px-3 h-11 border-b border-border bg-card shrink-0">
           <button
             onClick={() => setSidebarOpen(true)}
-            className="text-muted-foreground hover:text-foreground font-mono text-base leading-none"
+            className="text-muted-foreground hover:text-foreground font-mono text-2xl leading-none px-1 -ml-1"
             title="Open menu"
             aria-label="Open sidebar"
           >
             ≡
           </button>
-          <span className="text-xs font-mono text-foreground">{tabTitle}</span>
+          <span className="text-sm font-mono text-foreground flex-1 truncate">{tabTitle}</span>
+          {/* ChatNet brand logo — right-aligned */}
+          <span className="font-mono font-bold text-sm shrink-0" style={{ color: "var(--logo-chat)" }}>Chat</span><span className="font-mono font-bold text-sm shrink-0" style={{ color: "var(--logo-net)" }}>Net</span>
         </div>
 
         <div className="flex-1 min-h-0 overflow-hidden">

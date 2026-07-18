@@ -64,6 +64,8 @@ export function DmChat({ friendId, friendLabel }: DmChatProps) {
   const userLabels = useSocketStore(state => state.userLabels);
 
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const longPressTimer   = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const longPressPos     = useRef({ x: 0, y: 0 });
 
   useEffect(() => {
     if (!friendId) return;
@@ -146,9 +148,8 @@ export function DmChat({ friendId, friendLabel }: DmChatProps) {
     e.target.value = "";
   };
 
-  const handleImageContextMenu = (e: React.MouseEvent, src: string) => {
-    e.preventDefault();
-    setImgCtxMenu({ x: e.clientX, y: e.clientY, src });
+  const openImageMenu = (x: number, y: number, src: string) => {
+    setImgCtxMenu({ x, y, src });
   };
 
   const isFriendTyping = Object.keys(typingState[friendId] || {}).length > 0;
@@ -201,10 +202,17 @@ export function DmChat({ friendId, friendLabel }: DmChatProps) {
                     src={imgSrc(msg.content)}
                     alt="shared image"
                     className="max-w-[200px] sm:max-w-xs max-h-48 border border-border mt-0.5 cursor-pointer hover:opacity-80"
-                    style={{ display: "block" }}
+                    style={{ display: "block", WebkitTouchCallout: "none" }}
                     onClick={() => setLightboxSrc(imgSrc(msg.content))}
-                    onContextMenu={(e) => handleImageContextMenu(e, imgSrc(msg.content))}
-                    title="Click to view · Right-click to download"
+                    onContextMenu={(e) => { e.preventDefault(); openImageMenu(e.clientX, e.clientY, imgSrc(msg.content)); }}
+                    onTouchStart={(e) => {
+                      const t = e.touches[0];
+                      longPressPos.current = { x: t.clientX, y: t.clientY };
+                      longPressTimer.current = setTimeout(() => openImageMenu(longPressPos.current.x, longPressPos.current.y, imgSrc(msg.content)), 500);
+                    }}
+                    onTouchEnd={() => clearTimeout(longPressTimer.current)}
+                    onTouchMove={() => clearTimeout(longPressTimer.current)}
+                    title="Tap to view · Long-press or right-click to download"
                   />
                 ) : (
                   <p className="text-sm text-foreground whitespace-pre-wrap break-words leading-snug">

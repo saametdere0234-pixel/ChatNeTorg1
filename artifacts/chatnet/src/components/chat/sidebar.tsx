@@ -136,13 +136,9 @@ export function Sidebar({ currentTab, onSelectTab }: SidebarProps) {
   };
 
   const toggleStorage = () => {
-    const next = !storageEnabled;
-    setStorageEnabled(next);
-    // When turning storage OFF, immediately wipe the in-memory general chat
-    // history so nothing lingers on screen for the rest of this session.
-    if (!next) {
-      initGeneralMessages([]);
-    }
+    setStorageEnabled(!storageEnabled);
+    // Messages are NOT wiped mid-session when turning storage off —
+    // they only disappear on logout (see handleLogout).
   };
 
   const handleRemoveFriend = (friendId: string, friendLabel: string) => {
@@ -161,9 +157,8 @@ export function Sidebar({ currentTab, onSelectTab }: SidebarProps) {
     );
   };
 
-  const handleFriendContextMenu = (e: React.MouseEvent, friendId: string, friendLabel: string) => {
-    e.preventDefault();
-    setCtxMenu({ x: e.clientX, y: e.clientY, friendId, friendLabel });
+  const openFriendMenu = (x: number, y: number, friendId: string, friendLabel: string) => {
+    setCtxMenu({ x, y, friendId, friendLabel });
   };
 
   const handleLogout = () => {
@@ -278,19 +273,28 @@ export function Sidebar({ currentTab, onSelectTab }: SidebarProps) {
             // Use live label from socket if available (catches renames)
             const liveLabel = userLabels[friend.id] ?? friend.label;
             return (
-              <button
-                key={friend.id}
-                onClick={() => onSelectTab(friend.id, liveLabel)}
-                onContextMenu={(e) => handleFriendContextMenu(e, friend.id, liveLabel)}
-                className={`block w-full text-left px-1 py-1.5 sm:py-0.5 truncate ${
-                  currentTab === friend.id ? "text-primary" : "text-foreground hover:text-primary"
-                }`}
-              >
-                {liveLabel}
-                {friend.unreadCount && friend.unreadCount > 0 ? (
-                  <span className="ml-1 text-primary">[{friend.unreadCount}]</span>
-                ) : null}
-              </button>
+              <div key={friend.id} className="flex items-center">
+                <button
+                  onClick={() => onSelectTab(friend.id, liveLabel)}
+                  onContextMenu={(e) => { e.preventDefault(); openFriendMenu(e.clientX, e.clientY, friend.id, liveLabel); }}
+                  className={`flex-1 min-w-0 text-left px-1 py-1.5 sm:py-0.5 truncate ${
+                    currentTab === friend.id ? "text-primary" : "text-foreground hover:text-primary"
+                  }`}
+                >
+                  {liveLabel}
+                  {friend.unreadCount && friend.unreadCount > 0 ? (
+                    <span className="ml-1 text-primary">[{friend.unreadCount}]</span>
+                  ) : null}
+                </button>
+                {/* Mobile-only ⋮ button — single tap opens the options menu */}
+                <button
+                  onClick={(e) => openFriendMenu(e.clientX, e.clientY, friend.id, liveLabel)}
+                  className="sm:hidden shrink-0 px-2 py-2 text-muted-foreground hover:text-foreground text-base leading-none"
+                  aria-label="Friend options"
+                >
+                  ⋮
+                </button>
+              </div>
             );
           })
         )}
