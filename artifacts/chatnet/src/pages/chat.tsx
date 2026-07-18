@@ -75,9 +75,8 @@ export default function ChatLayout() {
           >
             ≡
           </button>
-          <span className="text-sm font-mono text-foreground flex-1 truncate">{tabTitle}</span>
-          {/* ChatNet brand logo — right-aligned */}
-          <span className="font-mono font-bold text-sm shrink-0" style={{ color: "var(--logo-chat)" }}>Chat</span><span className="font-mono font-bold text-sm shrink-0" style={{ color: "var(--logo-net)" }}>Net</span>
+          {/* ChatNet brand logo — sits right of the burger, replaces channel name */}
+          <span className="font-mono font-bold text-sm" style={{ color: "var(--logo-chat)" }}>Chat</span><span className="font-mono font-bold text-sm" style={{ color: "var(--logo-net)" }}>Net</span>
         </div>
 
         <div className="flex-1 min-h-0 overflow-hidden">

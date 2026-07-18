@@ -8,7 +8,7 @@ import { useToast } from "@/hooks/use-toast";
 import { ImageLightbox } from "@/components/ui/image-lightbox";
 import { ContextMenuOverlay } from "@/components/ui/context-menu-overlay";
 
-const MAX_IMAGE_BYTES = 2 * 1024 * 1024; // 2 MB
+const MAX_IMAGE_BYTES = 12 * 1024 * 1024; // 12 MB
 
 interface DmChatProps {
   friendId: string;
@@ -115,6 +115,8 @@ export function DmChat({ friendId, friendLabel }: DmChatProps) {
     setContent("");
     emitStopTyping(friendId);
     if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    // Re-focus input so the on-screen keyboard stays open on mobile
+    msgInputRef.current?.focus();
   };
 
   const handleTyping = (e: React.ChangeEvent<HTMLInputElement>) => {

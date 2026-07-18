@@ -14,7 +14,7 @@ import { ImageLightbox } from "@/components/ui/image-lightbox";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 
-const MAX_IMAGE_BYTES = 2 * 1024 * 1024; // 2 MB
+const MAX_IMAGE_BYTES = 12 * 1024 * 1024; // 12 MB
 
 interface BlockMessage {
   id: string;
@@ -104,6 +104,10 @@ export function GeneralChat() {
   const typingTimeoutRef  = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const longPressTimer    = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const longPressPos      = useRef({ x: 0, y: 0 });
+  // Tracks whether API history has already been used to seed the store this
+  // session. Prevents toggling storage ON/OFF from re-importing old server
+  // data and resurrecting messages that were deleted or cleared.
+  const apiInitialized    = useRef(false);
   const [ctxMenu, setCtxMenu]         = useState<MsgCtxMenu | null>(null);
   const [imgCtxMenu, setImgCtxMenu]   = useState<ImgCtxMenu | null>(null);
   const [blockPicker, setBlockPicker] = useState<BlockPickerMenu | null>(null);
@@ -120,10 +124,12 @@ export function GeneralChat() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // mount only
 
-  // When the API history arrives (storage ON), use it as the authoritative list
-  // (it may be fresher than what was cached in localStorage).
+  // When the API history arrives (storage ON), seed the store — but only ONCE
+  // per mount. Subsequent storage OFF→ON toggles must NOT re-import API data,
+  // otherwise messages the user deleted (or that were cleared) would reappear.
   useEffect(() => {
-    if (storageEnabled && apiHistory && apiHistory.length > 0) {
+    if (storageEnabled && apiHistory && apiHistory.length > 0 && !apiInitialized.current) {
+      apiInitialized.current = true;
       initGeneralMessages(apiHistory);
     }
   }, [apiHistory, storageEnabled, initGeneralMessages]);
@@ -169,6 +175,8 @@ export function GeneralChat() {
     setContent("");
     emitStopTyping("general");
     if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    // Re-focus input so the on-screen keyboard stays open on mobile
+    msgInputRef.current?.focus();
   };
 
   const handleTyping = (e: React.ChangeEvent<HTMLInputElement>) => {

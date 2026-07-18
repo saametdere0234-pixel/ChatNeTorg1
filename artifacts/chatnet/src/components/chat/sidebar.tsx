@@ -312,7 +312,8 @@ export function Sidebar({ currentTab, onSelectTab }: SidebarProps) {
         </div>
       )}
 
-      {/* Quiet Mode */}
+      {/* Quiet Mode — registered users only; guests have no incoming DMs so no need */}
+      {!user?.isGuest && (
       <div className="px-3 py-2 border-b border-border shrink-0">
         <button
           onClick={toggleQuietMode}
@@ -322,6 +323,7 @@ export function Sidebar({ currentTab, onSelectTab }: SidebarProps) {
           {quietMode ? "[quiet mode: on]" : "[quiet mode: off]"}
         </button>
       </div>
+      )}
 
       {/* Logout — same height as mobile top bar (h-9) for visual alignment */}
       <div className="px-3 border-t border-border flex items-center h-9 shrink-0">
