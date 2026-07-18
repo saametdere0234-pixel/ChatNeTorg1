@@ -35,7 +35,7 @@ export default function ChatLayout() {
   const tabTitle = currentTab === "general" ? "#general" : friendLabel;
 
   return (
-    <div className="h-screen w-full flex bg-background overflow-hidden relative">
+    <div className="h-[100dvh] w-full flex bg-background overflow-hidden relative">
       {!isSocketConnected && (
         <div className="absolute top-0 left-0 right-0 bg-destructive text-destructive-foreground text-xs font-mono text-center py-0.5 z-50">
           connection lost — reconnecting...

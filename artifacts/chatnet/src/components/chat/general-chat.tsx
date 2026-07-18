@@ -84,6 +84,7 @@ export function GeneralChat() {
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const msgInputRef = useRef<HTMLInputElement>(null);
 
   const { user } = useAuthContext();
   const { toast } = useToast();
@@ -138,11 +139,26 @@ export function GeneralChat() {
     } catch { /* quota exceeded — ignore */ }
   }, [messages, storageEnabled]);
 
-  useEffect(() => {
+  const scrollToBottom = () => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
+  };
+
+  useEffect(() => {
+    scrollToBottom();
   }, [messages]);
+
+  // When the on-screen keyboard appears the visual viewport shrinks.
+  // Scroll messages to the bottom each time so the latest message stays
+  // visible above the keyboard rather than being hidden under it.
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const onResize = () => scrollToBottom();
+    vv.addEventListener('resize', onResize);
+    return () => vv.removeEventListener('resize', onResize);
+  }, []);
 
   const handleSend = (e: React.FormEvent) => {
     e.preventDefault();
@@ -295,7 +311,7 @@ export function GeneralChat() {
       </div>
 
       {/* Typing indicator + input */}
-      <div className="border-t border-border bg-card">
+      <div className="border-t border-border bg-card shrink-0">
         {typingUsers.length > 0 && (
           <div className="px-3 pt-1 text-[10px] text-muted-foreground font-mono">
             {typingUsers.join(", ")} {typingUsers.length === 1 ? "is" : "are"} typing...
@@ -319,8 +335,14 @@ export function GeneralChat() {
             onChange={handleImageSelect}
           />
           <input
+            ref={msgInputRef}
             value={content}
             onChange={handleTyping}
+            onFocus={() => {
+              // Delay allows the keyboard animation to finish before scrolling
+              setTimeout(() => scrollToBottom(), 300);
+            }}
+            enterKeyHint="send"
             placeholder="type a message..."
             className="flex-1 bg-transparent px-2 py-2 text-sm font-mono text-foreground outline-none placeholder:text-muted-foreground h-11 sm:h-9 min-w-0"
           />

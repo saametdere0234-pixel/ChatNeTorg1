@@ -34,6 +34,7 @@ export function Sidebar({ currentTab, onSelectTab }: SidebarProps) {
   const setStorageEnabled = useAuthStore(state => state.setStorageEnabled);
   const emitNameUpdate = useSocketStore(state => state.emitNameUpdate);
   const userLabels = useSocketStore(state => state.userLabels);
+  const initGeneralMessages = useSocketStore(state => state.initGeneralMessages);
   const [_, setLocation] = useLocation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -135,7 +136,13 @@ export function Sidebar({ currentTab, onSelectTab }: SidebarProps) {
   };
 
   const toggleStorage = () => {
-    setStorageEnabled(!storageEnabled);
+    const next = !storageEnabled;
+    setStorageEnabled(next);
+    // When turning storage OFF, immediately wipe the in-memory general chat
+    // history so nothing lingers on screen for the rest of this session.
+    if (!next) {
+      initGeneralMessages([]);
+    }
   };
 
   const handleRemoveFriend = (friendId: string, friendLabel: string) => {
@@ -160,13 +167,13 @@ export function Sidebar({ currentTab, onSelectTab }: SidebarProps) {
   };
 
   const handleLogout = () => {
-    // Completely wipe all session state so the next account starts fresh
+    // Wipe in-memory general messages synchronously BEFORE navigating away
+    // so the next session (or a returning tab) starts completely clean.
+    initGeneralMessages([]);
+    // Always purge the localStorage cache on logout regardless of storage setting.
+    localStorage.removeItem('chatnet_general_messages');
     setToken(null);
     queryClient.clear(); // purge all React Query cache (user, messages, friends)
-    // When storage is off, also wipe any locally persisted chat history
-    if (!storageEnabled) {
-      localStorage.removeItem('chatnet_general_messages');
-    }
     setLocation("/auth");
   };
 

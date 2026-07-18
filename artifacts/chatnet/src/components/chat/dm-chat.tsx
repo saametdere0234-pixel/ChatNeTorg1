@@ -51,6 +51,7 @@ export function DmChat({ friendId, friendLabel }: DmChatProps) {
   const [imgCtxMenu, setImgCtxMenu] = useState<ImgCtxMenu | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const msgInputRef = useRef<HTMLInputElement>(null);
 
   const { user } = useAuthContext();
   const joinDm = useSocketStore(state => state.joinDm);
@@ -70,11 +71,26 @@ export function DmChat({ friendId, friendLabel }: DmChatProps) {
     return () => leaveDm(friendId);
   }, [friendId, joinDm, leaveDm]);
 
-  useEffect(() => {
+  const scrollToBottom = () => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
+  };
+
+  useEffect(() => {
+    scrollToBottom();
   }, [messages]);
+
+  // When the on-screen keyboard appears the visual viewport shrinks.
+  // Scroll messages to the bottom so the latest message stays visible
+  // above the keyboard rather than being hidden under it.
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const onResize = () => scrollToBottom();
+    vv.addEventListener('resize', onResize);
+    return () => vv.removeEventListener('resize', onResize);
+  }, []);
 
   useEffect(() => {
     if (!friendId || messages.length === 0) return;
@@ -202,7 +218,7 @@ export function DmChat({ friendId, friendLabel }: DmChatProps) {
       </div>
 
       {/* Typing + input */}
-      <div className="border-t border-border bg-card">
+      <div className="border-t border-border bg-card shrink-0">
         {isFriendTyping && (
           <div className="px-3 pt-1 text-[10px] text-muted-foreground font-mono">
             {liveFriendLabel} is typing...
@@ -226,8 +242,14 @@ export function DmChat({ friendId, friendLabel }: DmChatProps) {
             onChange={handleImageSelect}
           />
           <input
+            ref={msgInputRef}
             value={content}
             onChange={handleTyping}
+            onFocus={() => {
+              // Delay allows the keyboard animation to finish before scrolling
+              setTimeout(() => scrollToBottom(), 300);
+            }}
+            enterKeyHint="send"
             placeholder="type a message..."
             className="flex-1 bg-transparent px-2 py-2 text-sm font-mono text-foreground outline-none placeholder:text-muted-foreground h-11 sm:h-9 min-w-0"
           />

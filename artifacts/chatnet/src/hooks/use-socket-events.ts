@@ -4,17 +4,22 @@ import { DirectMessage, getGetFriendMessagesQueryKey, getGetFriendsQueryKey } fr
 import { useQueryClient as useReactQueryClient } from '@tanstack/react-query';
 
 export function useSocketEvents() {
-  const {
-    socket,
-    appendGeneralMessage,
-    removeGeneralMessage,
-    removeGeneralMessages,
-    patchGeneralMessage,
-  } = useSocketStore();
+  // Subscribe only to socket — the only value that triggers the effect to re-register
+  // listeners. Actions (append/remove/patch) are stable Zustand refs read via getState()
+  // inside the effect so they never cause unnecessary re-renders.
+  const socket = useSocketStore(s => s.socket);
   const queryClient = useReactQueryClient();
 
   useEffect(() => {
     if (!socket) return;
+
+    // Stable action refs — these never change identity between renders
+    const {
+      appendGeneralMessage,
+      removeGeneralMessage,
+      removeGeneralMessages,
+      patchGeneralMessage,
+    } = useSocketStore.getState();
 
     // ── General chat ──────────────────────────────────────────────────────
     const onNewGeneralMessage = (message: Parameters<typeof appendGeneralMessage>[0]) => {
@@ -51,22 +56,22 @@ export function useSocketEvents() {
       );
     };
 
-    socket.on('new-general-message',     onNewGeneralMessage);
-    socket.on('general-message-deleted', onGeneralMessageDeleted);
-    socket.on('general-messages-deleted',onGeneralMessagesDeleted);
-    socket.on('general-seen',            onGeneralSeen);
-    socket.on('new-dm',                  onNewDm);
-    socket.on('dm-notification',         onDmNotification);
-    socket.on('messages-seen',           onMessagesSeen);
+    socket.on('new-general-message',      onNewGeneralMessage);
+    socket.on('general-message-deleted',  onGeneralMessageDeleted);
+    socket.on('general-messages-deleted', onGeneralMessagesDeleted);
+    socket.on('general-seen',             onGeneralSeen);
+    socket.on('new-dm',                   onNewDm);
+    socket.on('dm-notification',          onDmNotification);
+    socket.on('messages-seen',            onMessagesSeen);
 
     return () => {
-      socket.off('new-general-message',     onNewGeneralMessage);
-      socket.off('general-message-deleted', onGeneralMessageDeleted);
-      socket.off('general-messages-deleted',onGeneralMessagesDeleted);
-      socket.off('general-seen',            onGeneralSeen);
-      socket.off('new-dm',                  onNewDm);
-      socket.off('dm-notification',         onDmNotification);
-      socket.off('messages-seen',           onMessagesSeen);
+      socket.off('new-general-message',      onNewGeneralMessage);
+      socket.off('general-message-deleted',  onGeneralMessageDeleted);
+      socket.off('general-messages-deleted', onGeneralMessagesDeleted);
+      socket.off('general-seen',             onGeneralSeen);
+      socket.off('new-dm',                   onNewDm);
+      socket.off('dm-notification',          onDmNotification);
+      socket.off('messages-seen',            onMessagesSeen);
     };
-  }, [socket, queryClient, appendGeneralMessage, removeGeneralMessage, removeGeneralMessages, patchGeneralMessage]);
+  }, [socket, queryClient]);
 }
