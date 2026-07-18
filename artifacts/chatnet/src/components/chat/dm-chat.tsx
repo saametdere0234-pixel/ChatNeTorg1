@@ -49,23 +49,23 @@ export function DmChat({ friendId, friendLabel }: DmChatProps) {
   const [content, setContent] = useState("");
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
   const [imgCtxMenu, setImgCtxMenu] = useState<ImgCtxMenu | null>(null);
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const scrollRef    = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const msgInputRef = useRef<HTMLInputElement>(null);
+  const msgInputRef  = useRef<HTMLInputElement>(null);
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const longPressPos   = useRef({ x: 0, y: 0 });
 
   const { user } = useAuthContext();
-  const joinDm = useSocketStore(state => state.joinDm);
-  const leaveDm = useSocketStore(state => state.leaveDm);
+  const joinDm        = useSocketStore(state => state.joinDm);
+  const leaveDm       = useSocketStore(state => state.leaveDm);
   const sendDmMessage = useSocketStore(state => state.sendDmMessage);
-  const emitTyping = useSocketStore(state => state.emitTyping);
+  const emitTyping    = useSocketStore(state => state.emitTyping);
   const emitStopTyping = useSocketStore(state => state.emitStopTyping);
-  const emitDmSeen = useSocketStore(state => state.emitDmSeen);
-  const typingState = useSocketStore(state => state.typingState);
-  const userLabels = useSocketStore(state => state.userLabels);
+  const emitDmSeen    = useSocketStore(state => state.emitDmSeen);
+  const typingState   = useSocketStore(state => state.typingState);
+  const userLabels    = useSocketStore(state => state.userLabels);
 
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const longPressTimer   = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const longPressPos     = useRef({ x: 0, y: 0 });
 
   useEffect(() => {
     if (!friendId) return;
@@ -79,13 +79,8 @@ export function DmChat({ friendId, friendLabel }: DmChatProps) {
     }
   };
 
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
+  useEffect(() => { scrollToBottom(); }, [messages]);
 
-  // When the on-screen keyboard appears the visual viewport shrinks.
-  // Scroll messages to the bottom so the latest message stays visible
-  // above the keyboard rather than being hidden under it.
   useEffect(() => {
     const vv = window.visualViewport;
     if (!vv) return;
@@ -115,7 +110,7 @@ export function DmChat({ friendId, friendLabel }: DmChatProps) {
     setContent("");
     emitStopTyping(friendId);
     if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-    // Re-focus input so the on-screen keyboard stays open on mobile
+    // Re-focus so the on-screen keyboard stays open on mobile
     msgInputRef.current?.focus();
   };
 
@@ -123,9 +118,7 @@ export function DmChat({ friendId, friendLabel }: DmChatProps) {
     setContent(e.target.value);
     emitTyping(friendId);
     if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-    typingTimeoutRef.current = setTimeout(() => {
-      emitStopTyping(friendId);
-    }, 2000);
+    typingTimeoutRef.current = setTimeout(() => emitStopTyping(friendId), 2000);
   };
 
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -137,25 +130,21 @@ export function DmChat({ friendId, friendLabel }: DmChatProps) {
       return;
     }
     if (file.size > MAX_IMAGE_BYTES) {
-      toast({ variant: "destructive", title: "Too large", description: "Image must be under 2 MB." });
+      toast({ variant: "destructive", title: "Too large", description: "Image must be under 12 MB." });
       e.target.value = "";
       return;
     }
     const reader = new FileReader();
     reader.onload = () => {
-      const dataUrl = reader.result as string;
-      sendDmMessage(friendId, `__img__:${dataUrl}`);
+      sendDmMessage(friendId, `__img__:${reader.result as string}`);
     };
     reader.readAsDataURL(file);
     e.target.value = "";
   };
 
-  const openImageMenu = (x: number, y: number, src: string) => {
-    setImgCtxMenu({ x, y, src });
-  };
+  const openImageMenu = (x: number, y: number, src: string) => setImgCtxMenu({ x, y, src });
 
   const isFriendTyping = Object.keys(typingState[friendId] || {}).length > 0;
-  // Use live label from socket store if the friend has renamed
   const liveFriendLabel = userLabels[friendId] ?? friendLabel;
 
   if (!friendId) return null;
@@ -164,38 +153,36 @@ export function DmChat({ friendId, friendLabel }: DmChatProps) {
     <div className="flex flex-col h-full bg-background">
       {/* DM header */}
       <div className="px-3 py-1.5 border-b border-border bg-card flex items-center justify-between">
-        <span className="text-xs font-mono text-foreground">{liveFriendLabel}</span>
-        <span className="text-xs font-mono text-muted-foreground">private</span>
+        <span className="text-sm sm:text-xs font-mono text-foreground">{liveFriendLabel}</span>
+        <span className="text-sm sm:text-xs font-mono text-muted-foreground">private</span>
       </div>
 
       {/* Messages */}
       <div
         ref={scrollRef}
-        className="flex-1 overflow-y-auto px-3 py-2 font-mono text-sm"
+        className="flex-1 overflow-y-auto px-3 py-3 sm:py-2 font-mono text-sm"
       >
         {isLoading ? (
-          <p className="text-muted-foreground text-xs">loading...</p>
+          <p className="text-muted-foreground text-sm sm:text-xs">loading...</p>
         ) : messages.length === 0 ? (
-          <p className="text-muted-foreground text-xs">no messages yet.</p>
+          <p className="text-muted-foreground text-sm sm:text-xs">no messages yet.</p>
         ) : (
           messages.map((msg, index) => {
             const prevMsg = messages[index - 1];
             const showHeader = !prevMsg || prevMsg.fromMe !== msg.fromMe;
 
             return (
-              <div key={msg.id} className={showHeader && index > 0 ? "mt-3" : "mt-0"}>
+              <div key={msg.id} className={showHeader && index > 0 ? "mt-4 sm:mt-3" : "mt-0"}>
                 {showHeader && (
                   <div className="flex items-baseline gap-2 mb-0.5">
-                    <span className={`text-xs font-bold ${msg.fromMe ? "text-primary" : "text-foreground"}`}>
+                    <span className={`text-sm sm:text-xs font-bold ${msg.fromMe ? "text-primary" : "text-foreground"}`}>
                       {msg.fromMe ? (user?.displayName ?? "you") : liveFriendLabel}
                     </span>
-                    <span className="text-[10px] text-muted-foreground">
+                    <span className="text-xs sm:text-[10px] text-muted-foreground">
                       {format(new Date(msg.createdAt), "HH:mm")}
                     </span>
-                    {msg.fromMe && (
-                      <span className="text-[10px] text-muted-foreground">
-                        {msg.seenAt ? "seen" : ""}
-                      </span>
+                    {msg.fromMe && msg.seenAt && (
+                      <span className="text-xs sm:text-[10px] text-muted-foreground">seen</span>
                     )}
                   </div>
                 )}
@@ -203,7 +190,7 @@ export function DmChat({ friendId, friendLabel }: DmChatProps) {
                   <img
                     src={imgSrc(msg.content)}
                     alt="shared image"
-                    className="max-w-[200px] sm:max-w-xs max-h-48 border border-border mt-0.5 cursor-pointer hover:opacity-80"
+                    className="max-w-[240px] sm:max-w-xs max-h-56 sm:max-h-48 border border-border mt-0.5 cursor-pointer hover:opacity-80"
                     style={{ display: "block", WebkitTouchCallout: "none" }}
                     onClick={() => setLightboxSrc(imgSrc(msg.content))}
                     onContextMenu={(e) => { e.preventDefault(); openImageMenu(e.clientX, e.clientY, imgSrc(msg.content)); }}
@@ -217,7 +204,7 @@ export function DmChat({ friendId, friendLabel }: DmChatProps) {
                     title="Tap to view · Long-press or right-click to download"
                   />
                 ) : (
-                  <p className="text-sm text-foreground whitespace-pre-wrap break-words leading-snug">
+                  <p className="text-base sm:text-sm text-foreground whitespace-pre-wrap break-words leading-snug">
                     {msg.content}
                   </p>
                 )}
@@ -230,16 +217,15 @@ export function DmChat({ friendId, friendLabel }: DmChatProps) {
       {/* Typing + input */}
       <div className="border-t border-border bg-card shrink-0">
         {isFriendTyping && (
-          <div className="px-3 pt-1 text-[10px] text-muted-foreground font-mono">
+          <div className="px-3 pt-1 text-xs sm:text-[10px] text-muted-foreground font-mono">
             {liveFriendLabel} is typing...
           </div>
         )}
-        <form onSubmit={handleSend} className="flex gap-0 h-11 sm:h-9">
-          {/* Image upload trigger */}
+        <form onSubmit={handleSend} className="flex gap-0 h-12 sm:h-9">
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
-            className="px-3 sm:px-2 flex items-center text-muted-foreground font-mono text-sm border-r border-border hover:text-foreground shrink-0"
+            className="px-4 sm:px-2 flex items-center text-muted-foreground font-mono text-base sm:text-sm border-r border-border hover:text-foreground shrink-0"
             title="Upload image"
           >
             {'>'}
@@ -255,44 +241,33 @@ export function DmChat({ friendId, friendLabel }: DmChatProps) {
             ref={msgInputRef}
             value={content}
             onChange={handleTyping}
-            onFocus={() => {
-              // Delay allows the keyboard animation to finish before scrolling
-              setTimeout(() => scrollToBottom(), 300);
-            }}
+            onFocus={() => setTimeout(() => scrollToBottom(), 300)}
             enterKeyHint="send"
             placeholder="type a message..."
-            className="flex-1 bg-transparent px-2 py-2 text-sm font-mono text-foreground outline-none placeholder:text-muted-foreground h-11 sm:h-9 min-w-0"
+            className="flex-1 bg-transparent px-3 sm:px-2 py-2 text-base sm:text-sm font-mono text-foreground outline-none placeholder:text-muted-foreground min-w-0"
           />
           <button
             type="submit"
             disabled={!content.trim()}
-            className="px-3 py-2 text-xs font-mono border-l border-border text-muted-foreground hover:text-foreground disabled:opacity-30 shrink-0"
+            className="px-4 sm:px-3 py-2 text-sm sm:text-xs font-mono border-l border-border text-muted-foreground hover:text-foreground disabled:opacity-30 shrink-0"
           >
             send
           </button>
         </form>
       </div>
 
-      {/* Right-click context menu for images */}
       {imgCtxMenu && (
         <ContextMenuOverlay
           x={imgCtxMenu.x}
           y={imgCtxMenu.y}
           onClose={() => setImgCtxMenu(null)}
           items={[
-            {
-              label: "Download image",
-              onClick: () => downloadImage(imgCtxMenu.src),
-            },
-            {
-              label: "View full size",
-              onClick: () => setLightboxSrc(imgCtxMenu.src),
-            },
+            { label: "Download image", onClick: () => downloadImage(imgCtxMenu.src) },
+            { label: "View full size",  onClick: () => setLightboxSrc(imgCtxMenu.src) },
           ]}
         />
       )}
 
-      {/* Image lightbox */}
       {lightboxSrc && (
         <ImageLightbox src={lightboxSrc} onClose={() => setLightboxSrc(null)} />
       )}

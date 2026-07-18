@@ -15,9 +15,17 @@ interface SocketStore {
   generalUserCount: number;
 
   // ── General messages (source of truth for the general chat) ──────────────
-  // Managed here so real-time updates (socket events) always work regardless
-  // of whether the React Query fetch is enabled or not.
   generalMessages: GeneralMessage[];
+  // Whether the authoritative API history has already been used to seed the
+  // store this session. Prevents navigating away and back from causing the
+  // API to overwrite deletions or newly-arrived socket messages.
+  generalMessagesInitialized: boolean;
+
+  // Seed from localStorage only — does NOT set the initialized flag.
+  // Used on mount for an instant display before the API fetch returns.
+  seedGeneralMessages: (msgs: GeneralMessage[]) => void;
+  // Authoritative seed from the API — sets generalMessagesInitialized so the
+  // API never overwrites the store again within this session.
   initGeneralMessages: (msgs: GeneralMessage[]) => void;
   appendGeneralMessage: (msg: GeneralMessage) => void;
   removeGeneralMessage: (id: string) => void;
@@ -49,15 +57,18 @@ export const useSocketStore = create<SocketStore>((set, get) => ({
   userLabels: {},
   generalUserCount: 0,
 
-  // General messages — always starts empty; populated by initGeneralMessages
-  // (called from GeneralChat on mount) and by real-time socket events.
   generalMessages: [],
+  generalMessagesInitialized: false,
 
-  initGeneralMessages: (msgs) => set({ generalMessages: msgs }),
+  seedGeneralMessages: (msgs) => set({ generalMessages: msgs }),
+  // generalMessagesInitialized is intentionally NOT reset here — once the API
+  // has seeded the store for this session, it stays sealed until disconnect().
+  initGeneralMessages: (msgs) =>
+    set({ generalMessages: msgs, generalMessagesInitialized: true }),
 
   appendGeneralMessage: (msg) =>
     set((s) => {
-      if (s.generalMessages.some((m) => m.id === msg.id)) return s; // deduplicate
+      if (s.generalMessages.some((m) => m.id === msg.id)) return s;
       return { generalMessages: [...s.generalMessages, msg] };
     }),
 
@@ -75,7 +86,7 @@ export const useSocketStore = create<SocketStore>((set, get) => ({
     })),
 
   connect: (token: string) => {
-    if (get().socket) return; // already connected — do not duplicate
+    if (get().socket) return;
 
     const socket = io({
       path: '/api/socket.io',
@@ -86,16 +97,10 @@ export const useSocketStore = create<SocketStore>((set, get) => ({
 
     socket.on('connect', () => {
       set({ isConnected: true });
-      // Re-join the general room after every (re)connect — socket.io drops room
-      // memberships server-side on disconnect.
-      if (get().inGeneral) {
-        socket.emit('join-general');
-      }
+      if (get().inGeneral) socket.emit('join-general');
     });
 
-    socket.on('disconnect', () => {
-      set({ isConnected: false });
-    });
+    socket.on('disconnect', () => set({ isConnected: false }));
 
     socket.on('typing', ({ userId, anonLabel, room }: { userId: string; anonLabel: string; room: string }) => {
       set((state) => ({
@@ -118,9 +123,7 @@ export const useSocketStore = create<SocketStore>((set, get) => ({
       set((state) => ({ userLabels: { ...state.userLabels, [userId]: newLabel } }));
     });
 
-    socket.on('general-user-count', (count: number) => {
-      set({ generalUserCount: count });
-    });
+    socket.on('general-user-count', (count: number) => set({ generalUserCount: count }));
 
     set({ socket });
   },
@@ -136,7 +139,9 @@ export const useSocketStore = create<SocketStore>((set, get) => ({
         typingState: {},
         userLabels: {},
         generalUserCount: 0,
-        generalMessages: [], // clear on every disconnect so next login starts fresh
+        generalMessages: [],
+        // Reset so the next session's API fetch can seed the store cleanly
+        generalMessagesInitialized: false,
       });
     }
   },

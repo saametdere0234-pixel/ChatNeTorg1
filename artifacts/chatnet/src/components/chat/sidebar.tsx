@@ -29,11 +29,11 @@ interface CtxMenu {
 
 export function Sidebar({ currentTab, onSelectTab }: SidebarProps) {
   const { user } = useAuthContext();
-  const setToken = useAuthStore(state => state.setToken);
-  const storageEnabled = useAuthStore(state => state.storageEnabled);
+  const setToken          = useAuthStore(state => state.setToken);
+  const storageEnabled    = useAuthStore(state => state.storageEnabled);
   const setStorageEnabled = useAuthStore(state => state.setStorageEnabled);
-  const emitNameUpdate = useSocketStore(state => state.emitNameUpdate);
-  const userLabels = useSocketStore(state => state.userLabels);
+  const emitNameUpdate    = useSocketStore(state => state.emitNameUpdate);
+  const userLabels        = useSocketStore(state => state.userLabels);
   const initGeneralMessages = useSocketStore(state => state.initGeneralMessages);
   const [_, setLocation] = useLocation();
   const { toast } = useToast();
@@ -41,24 +41,18 @@ export function Sidebar({ currentTab, onSelectTab }: SidebarProps) {
 
   const { data: friends = [] } = useGetFriends();
   const removeFriendMutation = useRemoveFriend();
-  const updateMeMutation = useUpdateMe();
+  const updateMeMutation     = useUpdateMe();
 
-  // Profile rename
   const [editingName, setEditingName] = useState(false);
-  const [nameInput, setNameInput] = useState("");
+  const [nameInput, setNameInput]     = useState("");
   const nameInputRef = useRef<HTMLInputElement>(null);
 
-  // Add friend
   const [addOpen, setAddOpen] = useState(false);
   const [addToken, setAddToken] = useState("");
 
-  // Logout confirm
   const [logoutConfirm, setLogoutConfirm] = useState(false);
 
-  // Quiet mode is on user object
   const quietMode = user?.quietMode ?? false;
-
-  // Friend right-click context menu
   const [ctxMenu, setCtxMenu] = useState<CtxMenu | null>(null);
 
   const handleCopyToken = () => {
@@ -76,19 +70,14 @@ export function Sidebar({ currentTab, onSelectTab }: SidebarProps) {
 
   const commitRename = () => {
     const trimmed = nameInput.trim();
-    if (!trimmed || trimmed === user?.displayName) {
-      setEditingName(false);
-      return;
-    }
+    if (!trimmed || trimmed === user?.displayName) { setEditingName(false); return; }
     updateMeMutation.mutate(
       { data: { displayName: trimmed } },
       {
         onSuccess: (updated) => {
           queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() });
           setEditingName(false);
-          // Sync new name over socket so live messages update immediately
-          const newLabel = updated.displayName ?? trimmed;
-          emitNameUpdate(newLabel);
+          emitNameUpdate(updated.displayName ?? trimmed);
         },
         onError: (err: unknown) => {
           const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
@@ -117,7 +106,6 @@ export function Sidebar({ currentTab, onSelectTab }: SidebarProps) {
 
   const toggleQuietMode = () => {
     const next = !quietMode;
-    // Optimistic update — flip immediately in the cache so the UI responds at once
     queryClient.setQueryData(getGetMeQueryKey(), (old: typeof user) =>
       old ? { ...old, quietMode: next } : old
     );
@@ -126,7 +114,6 @@ export function Sidebar({ currentTab, onSelectTab }: SidebarProps) {
       {
         onSuccess: () => queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() }),
         onError: () => {
-          // Revert on failure
           queryClient.setQueryData(getGetMeQueryKey(), (old: typeof user) =>
             old ? { ...old, quietMode: !next } : old
           );
@@ -137,8 +124,8 @@ export function Sidebar({ currentTab, onSelectTab }: SidebarProps) {
 
   const toggleStorage = () => {
     setStorageEnabled(!storageEnabled);
-    // Messages are NOT wiped mid-session when turning storage off —
-    // they only disappear on logout (see handleLogout).
+    // Messages stay visible for the current session regardless of toggle.
+    // Only logout wipes the history (see handleLogout).
   };
 
   const handleRemoveFriend = (friendId: string, friendLabel: string) => {
@@ -162,27 +149,30 @@ export function Sidebar({ currentTab, onSelectTab }: SidebarProps) {
   };
 
   const handleLogout = () => {
-    // Wipe in-memory general messages synchronously BEFORE navigating away
-    // so the next session (or a returning tab) starts completely clean.
+    // Clear in-memory messages immediately before navigating away
     initGeneralMessages([]);
-    // Always purge the localStorage cache on logout regardless of storage setting.
     localStorage.removeItem('chatnet_general_messages');
+    // Null token removes it from localStorage via setToken logic
     setToken(null);
-    queryClient.clear(); // purge all React Query cache (user, messages, friends)
+    queryClient.clear();
+    // Reset storage setting to ON so every new login starts with storage enabled.
+    // Called after setToken(null) so re-persisting an empty token is avoided.
+    setStorageEnabled(true);
     setLocation("/auth");
   };
 
   return (
-    <div className="w-52 flex flex-col h-full bg-card border-r border-border font-mono text-xs">
+    // w-64 on mobile gives more comfortable tap targets; w-52 on desktop keeps it compact
+    <div className="w-64 sm:w-52 flex flex-col h-full bg-card border-r border-border font-mono text-sm sm:text-xs">
+
       {/* Logo */}
-      <div className="px-3 py-2 border-b border-border shrink-0">
-        <span className="text-sm font-bold" style={{ color: 'var(--logo-chat)' }}>Chat</span>
-        <span className="text-sm font-bold" style={{ color: 'var(--logo-net)' }}>Net</span>
+      <div className="px-3 py-3 sm:py-2 border-b border-border shrink-0">
+        <span className="text-base sm:text-sm font-bold" style={{ color: 'var(--logo-chat)' }}>Chat</span>
+        <span className="text-base sm:text-sm font-bold" style={{ color: 'var(--logo-net)' }}>Net</span>
       </div>
 
       {/* Identity / Profile */}
-      <div className="px-3 py-2 border-b border-border shrink-0">
-        {/* Display name — click to rename */}
+      <div className="px-3 py-3 sm:py-2 border-b border-border shrink-0">
         {editingName ? (
           <input
             ref={nameInputRef}
@@ -194,18 +184,17 @@ export function Sidebar({ currentTab, onSelectTab }: SidebarProps) {
               if (e.key === "Escape") setEditingName(false);
             }}
             maxLength={30}
-            className="w-full bg-background border border-primary px-1 py-0 text-xs font-mono text-foreground outline-none mb-0.5"
+            className="w-full bg-background border border-primary px-1 py-0.5 text-sm sm:text-xs font-mono text-foreground outline-none mb-0.5"
           />
         ) : (
           <button
             onClick={startRename}
-            className="block text-foreground hover:text-primary font-bold text-xs mb-0.5 text-left w-full truncate"
+            className="block text-foreground hover:text-primary font-bold text-sm sm:text-xs mb-0.5 text-left w-full truncate"
             title="Click to change name"
           >
             {user?.displayName ?? "..."}
           </button>
         )}
-        {/* ID — only for registered users */}
         {user && !user.isGuest && (
           <div className="text-muted-foreground truncate">
             id:{" "}
@@ -220,11 +209,11 @@ export function Sidebar({ currentTab, onSelectTab }: SidebarProps) {
       </div>
 
       {/* Channels */}
-      <div className="px-3 py-2 border-b border-border shrink-0">
+      <div className="px-3 py-3 sm:py-2 border-b border-border shrink-0">
         <div className="text-muted-foreground mb-1">channels</div>
         <button
           onClick={() => onSelectTab("general")}
-          className={`block w-full text-left px-1 py-1.5 sm:py-0.5 ${
+          className={`block w-full text-left px-1 py-2 sm:py-0.5 ${
             currentTab === "general" ? "text-primary" : "text-foreground hover:text-primary"
           }`}
         >
@@ -233,13 +222,13 @@ export function Sidebar({ currentTab, onSelectTab }: SidebarProps) {
       </div>
 
       {/* Friends */}
-      <div className="px-3 py-2 flex-1 overflow-y-auto border-b border-border">
+      <div className="px-3 py-3 sm:py-2 flex-1 overflow-y-auto border-b border-border">
         <div className="flex items-center justify-between mb-1">
           <span className="text-muted-foreground">friends</span>
           {!user?.isGuest && (
             <button
               onClick={() => setAddOpen(v => !v)}
-              className="text-muted-foreground hover:text-primary"
+              className="text-muted-foreground hover:text-primary text-base sm:text-sm px-1"
               title="Add friend by token"
             >
               [+]
@@ -254,12 +243,12 @@ export function Sidebar({ currentTab, onSelectTab }: SidebarProps) {
               onChange={e => setAddToken(e.target.value)}
               placeholder="xx.xx.xx.xx"
               maxLength={11}
-              className="w-full bg-background border border-border px-1 py-0.5 text-xs font-mono text-foreground outline-none mb-1 placeholder:text-muted-foreground"
+              className="w-full bg-background border border-border px-2 py-1 text-sm sm:text-xs font-mono text-foreground outline-none mb-1 placeholder:text-muted-foreground"
             />
             <button
               type="submit"
               disabled={!addToken.trim()}
-              className="text-xs text-muted-foreground hover:text-foreground disabled:opacity-40"
+              className="text-sm sm:text-xs text-muted-foreground hover:text-foreground disabled:opacity-40"
             >
               [add]
             </button>
@@ -270,14 +259,13 @@ export function Sidebar({ currentTab, onSelectTab }: SidebarProps) {
           <div className="text-muted-foreground">none</div>
         ) : (
           friends.map((friend) => {
-            // Use live label from socket if available (catches renames)
             const liveLabel = userLabels[friend.id] ?? friend.label;
             return (
               <div key={friend.id} className="flex items-center">
                 <button
                   onClick={() => onSelectTab(friend.id, liveLabel)}
                   onContextMenu={(e) => { e.preventDefault(); openFriendMenu(e.clientX, e.clientY, friend.id, liveLabel); }}
-                  className={`flex-1 min-w-0 text-left px-1 py-1.5 sm:py-0.5 truncate ${
+                  className={`flex-1 min-w-0 text-left px-1 py-2 sm:py-0.5 truncate ${
                     currentTab === friend.id ? "text-primary" : "text-foreground hover:text-primary"
                   }`}
                 >
@@ -286,10 +274,10 @@ export function Sidebar({ currentTab, onSelectTab }: SidebarProps) {
                     <span className="ml-1 text-primary">[{friend.unreadCount}]</span>
                   ) : null}
                 </button>
-                {/* Mobile-only ⋮ button — single tap opens the options menu */}
+                {/* Mobile-only ⋮ tap button */}
                 <button
                   onClick={(e) => openFriendMenu(e.clientX, e.clientY, friend.id, liveLabel)}
-                  className="sm:hidden shrink-0 px-2 py-2 text-muted-foreground hover:text-foreground text-base leading-none"
+                  className="sm:hidden shrink-0 px-3 py-2 text-muted-foreground hover:text-foreground text-lg leading-none"
                   aria-label="Friend options"
                 >
                   ⋮
@@ -302,33 +290,33 @@ export function Sidebar({ currentTab, onSelectTab }: SidebarProps) {
 
       {/* Storage toggle — hidden for guests */}
       {!user?.isGuest && (
-        <div className="px-3 py-2 border-b border-border shrink-0">
+        <div className="px-3 py-3 sm:py-2 border-b border-border shrink-0">
           <button
             onClick={toggleStorage}
-            className={`text-xs ${storageEnabled ? "text-primary" : "text-muted-foreground hover:text-foreground"}`}
+            className={`${storageEnabled ? "text-primary" : "text-muted-foreground hover:text-foreground"}`}
           >
             {storageEnabled ? "[storage: on]" : "[storage: off]"}
           </button>
         </div>
       )}
 
-      {/* Quiet Mode — registered users only; guests have no incoming DMs so no need */}
+      {/* Quiet Mode — registered users only */}
       {!user?.isGuest && (
-      <div className="px-3 py-2 border-b border-border shrink-0">
-        <button
-          onClick={toggleQuietMode}
-          className={`text-xs ${quietMode ? "text-primary" : "text-muted-foreground hover:text-foreground"}`}
-          disabled={updateMeMutation.isPending}
-        >
-          {quietMode ? "[quiet mode: on]" : "[quiet mode: off]"}
-        </button>
-      </div>
+        <div className="px-3 py-3 sm:py-2 border-b border-border shrink-0">
+          <button
+            onClick={toggleQuietMode}
+            className={`${quietMode ? "text-primary" : "text-muted-foreground hover:text-foreground"}`}
+            disabled={updateMeMutation.isPending}
+          >
+            {quietMode ? "[quiet mode: on]" : "[quiet mode: off]"}
+          </button>
+        </div>
       )}
 
-      {/* Logout — same height as mobile top bar (h-9) for visual alignment */}
-      <div className="px-3 border-t border-border flex items-center h-9 shrink-0">
+      {/* Logout */}
+      <div className="px-3 border-t border-border flex items-center h-11 sm:h-9 shrink-0">
         {logoutConfirm ? (
-          <span className="text-xs text-foreground">
+          <span className="text-foreground">
             sure?{" "}
             <button onClick={handleLogout} className="text-destructive hover:underline">yes</button>
             {" / "}
@@ -337,7 +325,7 @@ export function Sidebar({ currentTab, onSelectTab }: SidebarProps) {
         ) : (
           <button
             onClick={() => setLogoutConfirm(true)}
-            className="text-muted-foreground hover:text-destructive text-xs"
+            className="text-muted-foreground hover:text-destructive"
           >
             [logout]
           </button>

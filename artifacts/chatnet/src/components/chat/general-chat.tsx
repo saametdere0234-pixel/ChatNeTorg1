@@ -38,7 +38,6 @@ interface ImgCtxMenu {
   src: string;
 }
 
-// Sub-picker for "Pick a message in block"
 interface BlockPickerMenu {
   x: number;
   y: number;
@@ -67,12 +66,15 @@ function truncate(text: string, max = 40) {
 export function GeneralChat() {
   const storageEnabled = useAuthStore(s => s.storageEnabled);
 
-  // Source of truth: socket store.
-  // Socket events (appendGeneralMessage etc.) always update it reliably.
-  // Storage ON  → seeded from localStorage on mount + API history when it arrives.
-  // Storage OFF → starts empty every login (reset on disconnect in socket store).
-  const messages        = useSocketStore(s => s.generalMessages);
-  const initGeneralMessages = useSocketStore(s => s.initGeneralMessages);
+  // Source of truth: socket store. Events always update it reliably.
+  const messages                   = useSocketStore(s => s.generalMessages);
+  // Lives in the store (not a component ref) so it survives component
+  // unmount/remount when navigating between general and DMs.
+  const generalMessagesInitialized = useSocketStore(s => s.generalMessagesInitialized);
+  // localStorage-only seed — does NOT set the initialized flag.
+  const seedGeneralMessages        = useSocketStore(s => s.seedGeneralMessages);
+  // Authoritative API seed — sets the flag so the API never re-seeds this session.
+  const initGeneralMessages        = useSocketStore(s => s.initGeneralMessages);
 
   // Fetch full history from API — only when storage is ON
   const { data: apiHistory } = useGetGeneralMessages({
@@ -82,57 +84,55 @@ export function GeneralChat() {
   const { data: friends = [] } = useGetFriends();
   const [content, setContent] = useState("");
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const scrollRef    = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const msgInputRef = useRef<HTMLInputElement>(null);
+  const msgInputRef  = useRef<HTMLInputElement>(null);
 
   const { user } = useAuthContext();
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const generalUserCount  = useSocketStore(s => s.generalUserCount);
-  const joinGeneral       = useSocketStore(s => s.joinGeneral);
-  const leaveGeneral      = useSocketStore(s => s.leaveGeneral);
+  const generalUserCount   = useSocketStore(s => s.generalUserCount);
+  const joinGeneral        = useSocketStore(s => s.joinGeneral);
+  const leaveGeneral       = useSocketStore(s => s.leaveGeneral);
   const sendGeneralMessage   = useSocketStore(s => s.sendGeneralMessage);
   const deleteGeneralMessage  = useSocketStore(s => s.deleteGeneralMessage);
   const deleteGeneralMessages = useSocketStore(s => s.deleteGeneralMessages);
-  const emitTyping        = useSocketStore(s => s.emitTyping);
-  const emitStopTyping    = useSocketStore(s => s.emitStopTyping);
-  const typingState       = useSocketStore(s => s.typingState);
-  const userLabels        = useSocketStore(s => s.userLabels);
+  const emitTyping         = useSocketStore(s => s.emitTyping);
+  const emitStopTyping     = useSocketStore(s => s.emitStopTyping);
+  const typingState        = useSocketStore(s => s.typingState);
+  const userLabels         = useSocketStore(s => s.userLabels);
 
-  const typingTimeoutRef  = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const longPressTimer    = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const longPressPos      = useRef({ x: 0, y: 0 });
-  // Tracks whether API history has already been used to seed the store this
-  // session. Prevents toggling storage ON/OFF from re-importing old server
-  // data and resurrecting messages that were deleted or cleared.
-  const apiInitialized    = useRef(false);
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const longPressTimer   = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const longPressPos     = useRef({ x: 0, y: 0 });
   const [ctxMenu, setCtxMenu]         = useState<MsgCtxMenu | null>(null);
   const [imgCtxMenu, setImgCtxMenu]   = useState<ImgCtxMenu | null>(null);
   const [blockPicker, setBlockPicker] = useState<BlockPickerMenu | null>(null);
 
-  // On mount: seed from localStorage immediately (storage ON) for instant display.
-  // Storage OFF → generalMessages is already [] from the disconnect reset.
+  // On mount: seed from localStorage immediately for instant display.
+  // Uses seedGeneralMessages — does NOT flip generalMessagesInitialized so the
+  // authoritative API fetch can still overwrite stale cache data.
   useEffect(() => {
     if (storageEnabled) {
       try {
         const raw = localStorage.getItem(GENERAL_MESSAGES_CACHE_KEY);
-        if (raw) initGeneralMessages(JSON.parse(raw));
+        if (raw) seedGeneralMessages(JSON.parse(raw));
       } catch { /* corrupted cache — ignore */ }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // mount only
 
-  // When the API history arrives (storage ON), seed the store — but only ONCE
-  // per mount. Subsequent storage OFF→ON toggles must NOT re-import API data,
-  // otherwise messages the user deleted (or that were cleared) would reappear.
+  // When the API history arrives (storage ON), seed the store authoritatively —
+  // but only ONCE per session (generalMessagesInitialized lives in the store, not
+  // a component ref, so remounting this component does not reset it).
+  // This prevents: navigating away + back from re-importing stale API data that
+  // would resurrect deleted messages.
   useEffect(() => {
-    if (storageEnabled && apiHistory && apiHistory.length > 0 && !apiInitialized.current) {
-      apiInitialized.current = true;
+    if (storageEnabled && apiHistory && apiHistory.length > 0 && !generalMessagesInitialized) {
       initGeneralMessages(apiHistory);
     }
-  }, [apiHistory, storageEnabled, initGeneralMessages]);
+  }, [apiHistory, storageEnabled, generalMessagesInitialized, initGeneralMessages]);
 
   useEffect(() => {
     joinGeneral();
@@ -158,8 +158,7 @@ export function GeneralChat() {
   }, [messages]);
 
   // When the on-screen keyboard appears the visual viewport shrinks.
-  // Scroll messages to the bottom each time so the latest message stays
-  // visible above the keyboard rather than being hidden under it.
+  // Scroll messages to bottom so the latest message stays visible.
   useEffect(() => {
     const vv = window.visualViewport;
     if (!vv) return;
@@ -175,7 +174,7 @@ export function GeneralChat() {
     setContent("");
     emitStopTyping("general");
     if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-    // Re-focus input so the on-screen keyboard stays open on mobile
+    // Re-focus so the on-screen keyboard stays open on mobile
     msgInputRef.current?.focus();
   };
 
@@ -183,9 +182,7 @@ export function GeneralChat() {
     setContent(e.target.value);
     emitTyping("general");
     if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-    typingTimeoutRef.current = setTimeout(() => {
-      emitStopTyping("general");
-    }, 2000);
+    typingTimeoutRef.current = setTimeout(() => emitStopTyping("general"), 2000);
   };
 
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -197,14 +194,13 @@ export function GeneralChat() {
       return;
     }
     if (file.size > MAX_IMAGE_BYTES) {
-      toast({ variant: "destructive", title: "Too large", description: "Image must be under 2 MB." });
+      toast({ variant: "destructive", title: "Too large", description: "Image must be under 12 MB." });
       e.target.value = "";
       return;
     }
     const reader = new FileReader();
     reader.onload = () => {
-      const dataUrl = reader.result as string;
-      sendGeneralMessage(`__img__:${dataUrl}`);
+      sendGeneralMessage(`__img__:${reader.result as string}`);
     };
     reader.readAsDataURL(file);
     e.target.value = "";
@@ -217,7 +213,6 @@ export function GeneralChat() {
 
   const friendIds = new Set(friends.map(f => f.id));
 
-  // Compute the block (consecutive messages from same sender) starting at index
   const getBlock = (startIndex: number): BlockMessage[] => {
     const senderId = messages[startIndex]?.senderId;
     if (!senderId) return [];
@@ -229,10 +224,8 @@ export function GeneralChat() {
     return block;
   };
 
-  // Open sender context menu — called from both desktop right-click and mobile tap
   const openSenderMenu = (
-    x: number,
-    y: number,
+    x: number, y: number,
     index: number,
     senderId: string,
     senderLabel: string,
@@ -244,10 +237,7 @@ export function GeneralChat() {
     setCtxMenu({ x, y, senderId, senderLabel, senderToken, isOwn, blockMessages, topMessageId });
   };
 
-  // Open image context menu — called from desktop right-click and mobile long-press
-  const openImageMenu = (x: number, y: number, src: string) => {
-    setImgCtxMenu({ x, y, src });
-  };
+  const openImageMenu = (x: number, y: number, src: string) => setImgCtxMenu({ x, y, src });
 
   const handleAddFromCtx = (token: string, label: string) => {
     addFriend({ token }).then((newFriend) => {
@@ -263,8 +253,8 @@ export function GeneralChat() {
     <div className="flex flex-col h-full bg-background">
       {/* Channel header */}
       <div className="px-3 py-1.5 border-b border-border bg-card flex items-center justify-between">
-        <span className="text-xs font-mono text-foreground">#general</span>
-        <span className="text-xs font-mono text-muted-foreground">
+        <span className="text-sm sm:text-xs font-mono text-foreground">#general</span>
+        <span className="text-sm sm:text-xs font-mono text-muted-foreground">
           {generalUserCount > 0 ? `${generalUserCount} online` : "public"}
         </span>
       </div>
@@ -275,7 +265,7 @@ export function GeneralChat() {
         className="flex-1 overflow-y-auto px-3 py-3 sm:py-2 space-y-0 font-mono text-sm"
       >
         {messages.length === 0 ? (
-          <p className="text-muted-foreground text-xs">no messages yet. say hello.</p>
+          <p className="text-muted-foreground text-sm sm:text-xs">no messages yet. say hello.</p>
         ) : (
           messages.map((msg, index) => {
             const isMe = msg.senderId === user?.id;
@@ -286,17 +276,17 @@ export function GeneralChat() {
               : (userLabels[msg.senderId] ?? msg.senderLabel);
 
             return (
-              <div key={msg.id} className={showHeader && index > 0 ? "mt-3" : "mt-0"}>
+              <div key={msg.id} className={showHeader && index > 0 ? "mt-4 sm:mt-3" : "mt-0"}>
                 {showHeader && (
                   <div className="flex items-baseline gap-2 mb-0.5">
                     <span
-                      className={`text-xs font-bold ${isMe ? "text-primary cursor-pointer hover:text-primary/70" : "text-foreground hover:text-primary cursor-pointer"}`}
+                      className={`text-sm sm:text-xs font-bold ${isMe ? "text-primary cursor-pointer hover:text-primary/70" : "text-foreground hover:text-primary cursor-pointer"}`}
                       onClick={(e) => openSenderMenu(e.clientX, e.clientY, index, msg.senderId, liveLabel, (msg as { senderToken?: string | null }).senderToken ?? null)}
                       onContextMenu={(e) => { e.preventDefault(); openSenderMenu(e.clientX, e.clientY, index, msg.senderId, liveLabel, (msg as { senderToken?: string | null }).senderToken ?? null); }}
                     >
                       {liveLabel}
                     </span>
-                    <span className="text-[10px] text-muted-foreground">
+                    <span className="text-xs sm:text-[10px] text-muted-foreground">
                       {format(new Date(msg.createdAt), "HH:mm")}
                     </span>
                   </div>
@@ -305,7 +295,7 @@ export function GeneralChat() {
                   <img
                     src={imgSrc(msg.content)}
                     alt="shared image"
-                    className="max-w-[200px] sm:max-w-xs max-h-48 border border-border mt-0.5 cursor-pointer hover:opacity-80"
+                    className="max-w-[240px] sm:max-w-xs max-h-56 sm:max-h-48 border border-border mt-0.5 cursor-pointer hover:opacity-80"
                     style={{ display: "block", WebkitTouchCallout: "none" }}
                     onClick={() => setLightboxSrc(imgSrc(msg.content))}
                     onContextMenu={(e) => { e.preventDefault(); openImageMenu(e.clientX, e.clientY, imgSrc(msg.content)); }}
@@ -319,7 +309,7 @@ export function GeneralChat() {
                     title="Tap to view · Long-press or right-click to download"
                   />
                 ) : (
-                  <p className="text-sm text-foreground whitespace-pre-wrap break-words leading-snug pl-0">
+                  <p className="text-base sm:text-sm text-foreground whitespace-pre-wrap break-words leading-snug pl-0">
                     {msg.content}
                   </p>
                 )}
@@ -332,16 +322,15 @@ export function GeneralChat() {
       {/* Typing indicator + input */}
       <div className="border-t border-border bg-card shrink-0">
         {typingUsers.length > 0 && (
-          <div className="px-3 pt-1 text-[10px] text-muted-foreground font-mono">
+          <div className="px-3 pt-1 text-xs sm:text-[10px] text-muted-foreground font-mono">
             {typingUsers.join(", ")} {typingUsers.length === 1 ? "is" : "are"} typing...
           </div>
         )}
-        <form onSubmit={handleSend} className="flex gap-0 h-11 sm:h-9">
-          {/* Image upload trigger */}
+        <form onSubmit={handleSend} className="flex gap-0 h-12 sm:h-9">
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
-            className="px-3 sm:px-2 flex items-center text-muted-foreground font-mono text-sm border-r border-border hover:text-foreground shrink-0"
+            className="px-4 sm:px-2 flex items-center text-muted-foreground font-mono text-base sm:text-sm border-r border-border hover:text-foreground shrink-0"
             title="Upload image"
           >
             {'>'}
@@ -357,25 +346,22 @@ export function GeneralChat() {
             ref={msgInputRef}
             value={content}
             onChange={handleTyping}
-            onFocus={() => {
-              // Delay allows the keyboard animation to finish before scrolling
-              setTimeout(() => scrollToBottom(), 300);
-            }}
+            onFocus={() => setTimeout(() => scrollToBottom(), 300)}
             enterKeyHint="send"
             placeholder="type a message..."
-            className="flex-1 bg-transparent px-2 py-2 text-sm font-mono text-foreground outline-none placeholder:text-muted-foreground h-11 sm:h-9 min-w-0"
+            className="flex-1 bg-transparent px-3 sm:px-2 py-2 text-base sm:text-sm font-mono text-foreground outline-none placeholder:text-muted-foreground min-w-0"
           />
           <button
             type="submit"
             disabled={!content.trim()}
-            className="px-3 py-2 text-xs font-mono border-l border-border text-muted-foreground hover:text-foreground disabled:opacity-30 shrink-0"
+            className="px-4 sm:px-3 py-2 text-sm sm:text-xs font-mono border-l border-border text-muted-foreground hover:text-foreground disabled:opacity-30 shrink-0"
           >
             send
           </button>
         </form>
       </div>
 
-      {/* Right-click context menu */}
+      {/* Sender context menu */}
       {ctxMenu && (
         <ContextMenuOverlay
           x={ctxMenu.x}
@@ -385,23 +371,17 @@ export function GeneralChat() {
             {
               label: "Delete message",
               danger: true,
-              onClick: () => {
-                deleteGeneralMessage(ctxMenu.topMessageId);
-              },
+              onClick: () => deleteGeneralMessage(ctxMenu.topMessageId),
             },
             ...(ctxMenu.blockMessages.length > 1 ? [
               {
                 label: "Delete all block",
                 danger: true,
-                onClick: () => {
-                  deleteGeneralMessages(ctxMenu.blockMessages.map(m => m.id));
-                },
+                onClick: () => deleteGeneralMessages(ctxMenu.blockMessages.map(m => m.id)),
               },
               {
                 label: "Pick a message in block",
-                onClick: () => {
-                  setBlockPicker({ x: ctxMenu.x + 160, y: ctxMenu.y, messages: ctxMenu.blockMessages });
-                },
+                onClick: () => setBlockPicker({ x: ctxMenu.x + 160, y: ctxMenu.y, messages: ctxMenu.blockMessages }),
               },
             ] : []),
           ] : [
@@ -421,55 +401,39 @@ export function GeneralChat() {
               },
             ] : []),
             ...(friendIds.has(ctxMenu.senderId) ? [
-              {
-                label: `Already friends`,
-                onClick: () => {},
-              },
+              { label: `Already friends`, onClick: () => {} },
             ] : []),
             ...(ctxMenu.senderToken === null ? [
-              {
-                label: `Guest — no ID`,
-                onClick: () => {},
-              },
+              { label: `Guest — no ID`, onClick: () => {} },
             ] : []),
           ]}
         />
       )}
 
-      {/* Block message picker overlay */}
+      {/* Block message picker */}
       {blockPicker && (
         <BlockPickerOverlay
           x={blockPicker.x}
           y={blockPicker.y}
           messages={blockPicker.messages}
-          onSelect={(id) => {
-            deleteGeneralMessage(id);
-            setBlockPicker(null);
-          }}
+          onSelect={(id) => { deleteGeneralMessage(id); setBlockPicker(null); }}
           onClose={() => setBlockPicker(null)}
         />
       )}
 
-      {/* Right-click context menu for images */}
+      {/* Image context menu */}
       {imgCtxMenu && (
         <ContextMenuOverlay
           x={imgCtxMenu.x}
           y={imgCtxMenu.y}
           onClose={() => setImgCtxMenu(null)}
           items={[
-            {
-              label: "Download image",
-              onClick: () => downloadImage(imgCtxMenu.src),
-            },
-            {
-              label: "View full size",
-              onClick: () => setLightboxSrc(imgCtxMenu.src),
-            },
+            { label: "Download image", onClick: () => downloadImage(imgCtxMenu.src) },
+            { label: "View full size",  onClick: () => setLightboxSrc(imgCtxMenu.src) },
           ]}
         />
       )}
 
-      {/* Image lightbox */}
       {lightboxSrc && (
         <ImageLightbox src={lightboxSrc} onClose={() => setLightboxSrc(null)} />
       )}
@@ -478,11 +442,7 @@ export function GeneralChat() {
 }
 
 function BlockPickerOverlay({
-  x,
-  y,
-  messages,
-  onSelect,
-  onClose,
+  x, y, messages, onSelect, onClose,
 }: {
   x: number;
   y: number;
@@ -494,9 +454,7 @@ function BlockPickerOverlay({
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        onClose();
-      }
+      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
@@ -505,9 +463,9 @@ function BlockPickerOverlay({
   const style: React.CSSProperties = {
     position: "fixed",
     left: Math.min(x, window.innerWidth - 220),
-    top: Math.min(y, window.innerHeight - messages.length * 30 - 40),
+    top:  Math.min(y, window.innerHeight - messages.length * 44 - 40),
     zIndex: 9999,
-    maxHeight: 280,
+    maxHeight: 320,
     overflowY: "auto",
   };
 
@@ -515,16 +473,16 @@ function BlockPickerOverlay({
     <div
       ref={ref}
       style={style}
-      className="bg-card border border-border font-mono text-xs shadow-none min-w-[200px]"
+      className="bg-card border border-border font-mono text-sm sm:text-xs shadow-lg min-w-[200px]"
     >
-      <div className="px-3 py-1.5 text-[10px] text-muted-foreground border-b border-border">
+      <div className="px-3 py-2 text-xs sm:text-[10px] text-muted-foreground border-b border-border">
         pick message to delete
       </div>
       {messages.map((msg, i) => (
         <button
           key={msg.id}
           onClick={() => onSelect(msg.id)}
-          className="block w-full text-left px-3 py-1.5 hover:bg-accent text-destructive"
+          className="block w-full text-left px-3 py-3 sm:py-1.5 hover:bg-accent text-destructive"
         >
           {i + 1}. {truncate(msg.content)}
         </button>
