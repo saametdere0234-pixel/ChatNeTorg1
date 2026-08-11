@@ -4,9 +4,14 @@ import {
   useGetFriends,
   useRemoveFriend,
   useUpdateMe,
+  useDeleteMyGeneralHistory,
+  useDeleteMyDmHistory,
+  useDeleteFriendHistory,
   addFriend,
   getGetFriendsQueryKey,
   getGetMeQueryKey,
+  getGetGeneralMessagesQueryKey,
+  getGetFriendMessagesQueryKey,
 } from "@workspace/api-client-react";
 import { useAuthStore } from "@/store/use-auth";
 import { useSocketStore } from "@/store/use-socket";
@@ -30,8 +35,6 @@ interface CtxMenu {
 export function Sidebar({ currentTab, onSelectTab }: SidebarProps) {
   const { user } = useAuthContext();
   const setToken          = useAuthStore(state => state.setToken);
-  const storageEnabled    = useAuthStore(state => state.storageEnabled);
-  const setStorageEnabled = useAuthStore(state => state.setStorageEnabled);
   const emitNameUpdate    = useSocketStore(state => state.emitNameUpdate);
   const userLabels        = useSocketStore(state => state.userLabels);
   const initGeneralMessages = useSocketStore(state => state.initGeneralMessages);
@@ -42,6 +45,9 @@ export function Sidebar({ currentTab, onSelectTab }: SidebarProps) {
   const { data: friends = [] } = useGetFriends();
   const removeFriendMutation = useRemoveFriend();
   const updateMeMutation     = useUpdateMe();
+  const deleteGeneralHistoryMutation = useDeleteMyGeneralHistory();
+  const deleteDmHistoryMutation = useDeleteMyDmHistory();
+  const deleteFriendHistoryMutation = useDeleteFriendHistory();
 
   const [editingName, setEditingName] = useState(false);
   const [nameInput, setNameInput]     = useState("");
@@ -51,6 +57,8 @@ export function Sidebar({ currentTab, onSelectTab }: SidebarProps) {
   const [addToken, setAddToken] = useState("");
 
   const [logoutConfirm, setLogoutConfirm] = useState(false);
+  const [deleteHistoryConfirm, setDeleteHistoryConfirm] = useState(false);
+  const [deletingHistory, setDeletingHistory] = useState(false);
 
   const quietMode = user?.quietMode ?? false;
   const [ctxMenu, setCtxMenu] = useState<CtxMenu | null>(null);
@@ -122,10 +130,51 @@ export function Sidebar({ currentTab, onSelectTab }: SidebarProps) {
     );
   };
 
-  const toggleStorage = () => {
-    setStorageEnabled(!storageEnabled);
-    // Messages stay visible for the current session regardless of toggle.
-    // Only logout wipes the history (see handleLogout).
+  const handleDeleteAllHistory = async () => {
+    setDeletingHistory(true);
+    try {
+      await Promise.all([
+        deleteGeneralHistoryMutation.mutateAsync(),
+        deleteDmHistoryMutation.mutateAsync(),
+      ]);
+
+      initGeneralMessages([]);
+      localStorage.removeItem("chatnet_general_messages");
+      queryClient.setQueryData(getGetGeneralMessagesQueryKey(), []);
+      queryClient.setQueriesData<unknown[]>({
+        predicate: (query) => {
+          const key = query.queryKey[0];
+          return typeof key === "string"
+            && key.startsWith("/api/friends/")
+            && key.endsWith("/messages");
+        },
+      }, () => []);
+      queryClient.invalidateQueries({ queryKey: getGetFriendsQueryKey() });
+      setDeleteHistoryConfirm(false);
+      toast({ title: "History deleted", description: "Your chat and DM history was deleted." });
+    } catch {
+      toast({ variant: "destructive", title: "Error", description: "Could not delete all history." });
+    } finally {
+      setDeletingHistory(false);
+    }
+  };
+
+  const handleDeleteFriendHistory = (friendId: string, friendLabel: string) => {
+    if (!window.confirm(`are you sure you want to delete your history with ${friendLabel}?`)) return;
+
+    deleteFriendHistoryMutation.mutate(
+      { friendId },
+      {
+        onSuccess: () => {
+          queryClient.setQueryData(getGetFriendMessagesQueryKey(friendId), []);
+          queryClient.invalidateQueries({ queryKey: getGetFriendsQueryKey() });
+          toast({ title: "History deleted", description: `DM history with ${friendLabel} was deleted.` });
+        },
+        onError: () => {
+          toast({ variant: "destructive", title: "Error", description: "Could not delete DM history." });
+        },
+      },
+    );
   };
 
   const handleRemoveFriend = (friendId: string, friendLabel: string) => {
@@ -155,9 +204,6 @@ export function Sidebar({ currentTab, onSelectTab }: SidebarProps) {
     // Null token removes it from localStorage via setToken logic
     setToken(null);
     queryClient.clear();
-    // Reset storage setting to ON so every new login starts with storage enabled.
-    // Called after setToken(null) so re-persisting an empty token is avoided.
-    setStorageEnabled(true);
     setLocation("/auth");
   };
 
@@ -288,15 +334,36 @@ export function Sidebar({ currentTab, onSelectTab }: SidebarProps) {
         )}
       </div>
 
-      {/* Storage toggle — hidden for guests */}
+      {/* Delete stored history — hidden for guests */}
       {!user?.isGuest && (
         <div className="px-3 py-3 sm:py-2 border-b border-border shrink-0">
-          <button
-            onClick={toggleStorage}
-            className={`${storageEnabled ? "text-primary" : "text-muted-foreground hover:text-foreground"}`}
-          >
-            {storageEnabled ? "[storage: on]" : "[storage: off]"}
-          </button>
+          {deleteHistoryConfirm ? (
+            <span className="text-foreground">
+              are you sure?{" "}
+              <button
+                onClick={handleDeleteAllHistory}
+                disabled={deletingHistory}
+                className="text-destructive hover:underline disabled:opacity-40"
+              >
+                {deletingHistory ? "deleting..." : "yes"}
+              </button>
+              {" / "}
+              <button
+                onClick={() => setDeleteHistoryConfirm(false)}
+                disabled={deletingHistory}
+                className="text-muted-foreground hover:text-foreground disabled:opacity-40"
+              >
+                no
+              </button>
+            </span>
+          ) : (
+            <button
+              onClick={() => setDeleteHistoryConfirm(true)}
+              className="text-muted-foreground hover:text-destructive"
+            >
+              [delete storage]
+            </button>
+          )}
         </div>
       )}
 
@@ -339,6 +406,11 @@ export function Sidebar({ currentTab, onSelectTab }: SidebarProps) {
           y={ctxMenu.y}
           onClose={() => setCtxMenu(null)}
           items={[
+            {
+              label: "Delete history",
+              danger: true,
+              onClick: () => handleDeleteFriendHistory(ctxMenu.friendId, ctxMenu.friendLabel),
+            },
             {
               label: `Remove ${ctxMenu.friendLabel}`,
               danger: true,

@@ -16,6 +16,8 @@ tags:
     description: General chat (whole server)
   - name: friends
     description: Friend management and DM chat
+  - name: history
+    description: Chat history management
 paths:
   /healthz:
     get:
@@ -154,6 +156,17 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/GeneralMessage"
+    delete:
+      operationId: deleteMyGeneralHistory
+      tags: [history]
+      summary: Delete the current user's stored general chat history
+      responses:
+        "200":
+          description: History deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeletedHistoryResult"
 
   /friends:
     get:
@@ -169,6 +182,19 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/Friend"
+
+  /friends/messages:
+    delete:
+      operationId: deleteMyDmHistory
+      tags: [history]
+      summary: Delete all direct messages from the current user's conversations
+      responses:
+        "200":
+          description: History deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeletedHistoryResult"
 
   /friends/add:
     post:
@@ -215,6 +241,25 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/DirectMessage"
+        "403":
+          description: Not friends
+    delete:
+      operationId: deleteFriendHistory
+      tags: [history]
+      summary: Delete all direct messages in a friend conversation
+      parameters:
+        - name: friendId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: History deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeletedHistoryResult"
         "403":
           description: Not friends
 
@@ -416,3 +461,19 @@ components:
       properties:
         removed:
           type: boolean
+    DeletedHistoryResult:
+      type: object
+      required: [deletedGeneralCount, deletedDmCount, deletedGeneralIds, deletedDmFriendIds]
+      properties:
+        deletedGeneralCount:
+          type: integer
+        deletedDmCount:
+          type: integer
+        deletedGeneralIds:
+          type: array
+          items:
+            type: string
+        deletedDmFriendIds:
+          type: array
+          items:
+            type: string

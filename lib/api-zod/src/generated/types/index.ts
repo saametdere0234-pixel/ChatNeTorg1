@@ -9,6 +9,7 @@
 export * from './addFriendInput';
 export * from './authResponse';
 export * from './authUser';
+export * from './deletedHistoryResult';
 export * from './directMessage';
 export * from './friend';
 export * from './generalMessage';

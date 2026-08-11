@@ -23,6 +23,7 @@ import type {
   AddFriendInput,
   AuthResponse,
   AuthUser,
+  DeletedHistoryResult,
   DirectMessage,
   Friend,
   GeneralMessage,
@@ -585,6 +586,77 @@ export function useGetGeneralMessages<TData = Awaited<ReturnType<typeof getGener
 
 
 
+export const getDeleteMyGeneralHistoryUrl = () => {
+
+
+
+
+  return `/api/general/messages`
+}
+
+/**
+ * @summary Delete the current user's stored general chat history
+ */
+export const deleteMyGeneralHistory = async ( options?: RequestInit): Promise<DeletedHistoryResult> => {
+
+  return customFetch<DeletedHistoryResult>(getDeleteMyGeneralHistoryUrl(),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeleteMyGeneralHistoryMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteMyGeneralHistory>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteMyGeneralHistory>>, TError,void, TContext> => {
+
+const mutationKey = ['deleteMyGeneralHistory'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteMyGeneralHistory>>, void> = () => {
+
+
+          return  deleteMyGeneralHistory(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteMyGeneralHistoryMutationResult = NonNullable<Awaited<ReturnType<typeof deleteMyGeneralHistory>>>
+
+    export type DeleteMyGeneralHistoryMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Delete the current user's stored general chat history
+ */
+export const useDeleteMyGeneralHistory = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteMyGeneralHistory>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteMyGeneralHistory>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getDeleteMyGeneralHistoryMutationOptions(options));
+    }
+
 export const getGetFriendsUrl = () => {
 
 
@@ -661,6 +733,77 @@ export function useGetFriends<TData = Awaited<ReturnType<typeof getFriends>>, TE
 
 
 
+
+export const getDeleteMyDmHistoryUrl = () => {
+
+
+
+
+  return `/api/friends/messages`
+}
+
+/**
+ * @summary Delete all direct messages from the current user's conversations
+ */
+export const deleteMyDmHistory = async ( options?: RequestInit): Promise<DeletedHistoryResult> => {
+
+  return customFetch<DeletedHistoryResult>(getDeleteMyDmHistoryUrl(),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeleteMyDmHistoryMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteMyDmHistory>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteMyDmHistory>>, TError,void, TContext> => {
+
+const mutationKey = ['deleteMyDmHistory'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteMyDmHistory>>, void> = () => {
+
+
+          return  deleteMyDmHistory(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteMyDmHistoryMutationResult = NonNullable<Awaited<ReturnType<typeof deleteMyDmHistory>>>
+
+    export type DeleteMyDmHistoryMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Delete all direct messages from the current user's conversations
+ */
+export const useDeleteMyDmHistory = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteMyDmHistory>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteMyDmHistory>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getDeleteMyDmHistoryMutationOptions(options));
+    }
 
 export const getAddFriendUrl = () => {
 
@@ -809,6 +952,77 @@ export function useGetFriendMessages<TData = Awaited<ReturnType<typeof getFriend
 
 
 
+
+export const getDeleteFriendHistoryUrl = (friendId: string,) => {
+
+
+
+
+  return `/api/friends/${friendId}/messages`
+}
+
+/**
+ * @summary Delete all direct messages in a friend conversation
+ */
+export const deleteFriendHistory = async (friendId: string, options?: RequestInit): Promise<DeletedHistoryResult> => {
+
+  return customFetch<DeletedHistoryResult>(getDeleteFriendHistoryUrl(friendId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeleteFriendHistoryMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteFriendHistory>>, TError,{friendId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteFriendHistory>>, TError,{friendId: string}, TContext> => {
+
+const mutationKey = ['deleteFriendHistory'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteFriendHistory>>, {friendId: string}> = (props) => {
+          const {friendId} = props ?? {};
+
+          return  deleteFriendHistory(friendId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteFriendHistoryMutationResult = NonNullable<Awaited<ReturnType<typeof deleteFriendHistory>>>
+
+    export type DeleteFriendHistoryMutationError = ErrorType<void>
+
+    /**
+ * @summary Delete all direct messages in a friend conversation
+ */
+export const useDeleteFriendHistory = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteFriendHistory>>, TError,{friendId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteFriendHistory>>,
+        TError,
+        {friendId: string},
+        TContext
+      > => {
+      return useMutation(getDeleteFriendHistoryMutationOptions(options));
+    }
 
 export const getMarkSeenUrl = (friendId: string,) => {
 

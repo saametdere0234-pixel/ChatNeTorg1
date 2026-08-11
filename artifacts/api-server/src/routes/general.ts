@@ -73,4 +73,26 @@ router.get("/messages", requireAuth, async (req, res) => {
   );
 });
 
+// DELETE /api/general/messages — delete the current user's own stored public messages
+router.delete("/messages", requireAuth, async (req, res) => {
+  const userId = req.userId!;
+  const owned = await db
+    .select({ id: generalMessagesTable.id })
+    .from(generalMessagesTable)
+    .where(eq(generalMessagesTable.senderId, userId));
+  const ids = owned.map((message) => message.id);
+
+  if (ids.length > 0) {
+    await db.delete(generalMessageSeenTable).where(inArray(generalMessageSeenTable.messageId, ids));
+    await db.delete(generalMessagesTable).where(inArray(generalMessagesTable.id, ids));
+  }
+
+  res.json({
+    deletedGeneralCount: ids.length,
+    deletedDmCount: 0,
+    deletedGeneralIds: ids,
+    deletedDmFriendIds: [],
+  });
+});
+
 export default router;

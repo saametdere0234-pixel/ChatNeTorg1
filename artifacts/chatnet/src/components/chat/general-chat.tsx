@@ -64,8 +64,6 @@ function truncate(text: string, max = 40) {
 }
 
 export function GeneralChat() {
-  const storageEnabled = useAuthStore(s => s.storageEnabled);
-
   // Source of truth: socket store. Events always update it reliably.
   const messages                   = useSocketStore(s => s.generalMessages);
   // Lives in the store (not a component ref) so it survives component
@@ -76,10 +74,8 @@ export function GeneralChat() {
   // Authoritative API seed — sets the flag so the API never re-seeds this session.
   const initGeneralMessages        = useSocketStore(s => s.initGeneralMessages);
 
-  // Fetch full history from API — only when storage is ON
-  const { data: apiHistory } = useGetGeneralMessages({
-    query: { enabled: storageEnabled },
-  });
+  // Chat history is always server-backed. The delete action is explicit.
+  const { data: apiHistory } = useGetGeneralMessages();
 
   const { data: friends = [] } = useGetFriends();
   const [content, setContent] = useState("");
@@ -114,38 +110,39 @@ export function GeneralChat() {
   // Uses seedGeneralMessages — does NOT flip generalMessagesInitialized so the
   // authoritative API fetch can still overwrite stale cache data.
   useEffect(() => {
-    if (storageEnabled) {
-      try {
-        const raw = localStorage.getItem(GENERAL_MESSAGES_CACHE_KEY);
-        if (raw) seedGeneralMessages(JSON.parse(raw));
-      } catch { /* corrupted cache — ignore */ }
-    }
+    try {
+      const raw = localStorage.getItem(GENERAL_MESSAGES_CACHE_KEY);
+      if (raw) seedGeneralMessages(JSON.parse(raw));
+    } catch { /* corrupted cache — ignore */ }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // mount only
 
-  // When the API history arrives (storage ON), seed the store authoritatively —
+  // When the API history arrives, seed the store authoritatively —
   // but only ONCE per session (generalMessagesInitialized lives in the store, not
   // a component ref, so remounting this component does not reset it).
   // This prevents: navigating away + back from re-importing stale API data that
   // would resurrect deleted messages.
   useEffect(() => {
-    if (storageEnabled && apiHistory && apiHistory.length > 0 && !generalMessagesInitialized) {
+    if (apiHistory && !generalMessagesInitialized) {
       initGeneralMessages(apiHistory);
     }
-  }, [apiHistory, storageEnabled, generalMessagesInitialized, initGeneralMessages]);
+  }, [apiHistory, generalMessagesInitialized, initGeneralMessages]);
 
   useEffect(() => {
     joinGeneral();
     return () => leaveGeneral();
   }, [joinGeneral, leaveGeneral]);
 
-  // Persist messages to localStorage whenever they change (storage ON only)
+  // Keep a fast local cache for display while the server remains authoritative.
   useEffect(() => {
-    if (!storageEnabled || messages.length === 0) return;
     try {
-      localStorage.setItem(GENERAL_MESSAGES_CACHE_KEY, JSON.stringify(messages));
+      if (messages.length === 0) {
+        localStorage.removeItem(GENERAL_MESSAGES_CACHE_KEY);
+      } else {
+        localStorage.setItem(GENERAL_MESSAGES_CACHE_KEY, JSON.stringify(messages));
+      }
     } catch { /* quota exceeded — ignore */ }
-  }, [messages, storageEnabled]);
+  }, [messages]);
 
   const scrollToBottom = () => {
     if (scrollRef.current) {

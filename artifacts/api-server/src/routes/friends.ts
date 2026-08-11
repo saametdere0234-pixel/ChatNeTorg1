@@ -5,7 +5,7 @@ import {
   friendshipsTable,
   directMessagesTable,
 } from "@workspace/db/schema";
-import { eq, and, or, desc, isNull } from "drizzle-orm";
+import { eq, and, or, desc, isNull, inArray } from "drizzle-orm";
 import { requireAuth } from "../lib/auth.js";
 import { generateId } from "../lib/ids.js";
 import { AddFriendBody } from "@workspace/api-zod";
@@ -127,10 +127,45 @@ router.post("/add", requireAuth, async (req, res) => {
   });
 });
 
+// DELETE /api/friends/messages — delete all direct messages in the user's conversations
+router.delete("/messages", requireAuth, async (req, res) => {
+  const userId = req.userId!;
+  const friendships = await db
+    .select()
+    .from(friendshipsTable)
+    .where(or(eq(friendshipsTable.user1Id, userId), eq(friendshipsTable.user2Id, userId)));
+  const friendshipIds = friendships.map((friendship) => friendship.id);
+  const friendIds = friendships.map((friendship) =>
+    friendship.user1Id === userId ? friendship.user2Id : friendship.user1Id,
+  );
+
+  if (friendshipIds.length === 0) {
+    res.json({
+      deletedGeneralCount: 0,
+      deletedDmCount: 0,
+      deletedGeneralIds: [],
+      deletedDmFriendIds: [],
+    });
+    return;
+  }
+
+  const deleted = await db
+    .delete(directMessagesTable)
+    .where(inArray(directMessagesTable.friendshipId, friendshipIds))
+    .returning({ id: directMessagesTable.id });
+
+  res.json({
+    deletedGeneralCount: 0,
+    deletedDmCount: deleted.length,
+    deletedGeneralIds: [],
+    deletedDmFriendIds: friendIds,
+  });
+});
+
 // DELETE /api/friends/:friendId
 router.delete("/:friendId", requireAuth, async (req, res) => {
   const userId = req.userId!;
-  const { friendId } = req.params;
+  const friendId = String(req.params.friendId);
 
   const [friendship] = await db
     .select()
@@ -158,7 +193,7 @@ router.delete("/:friendId", requireAuth, async (req, res) => {
 // GET /api/friends/:friendId/messages
 router.get("/:friendId/messages", requireAuth, async (req, res) => {
   const userId = req.userId!;
-  const { friendId } = req.params;
+  const friendId = String(req.params.friendId);
 
   const [friendship] = await db
     .select()
@@ -196,10 +231,44 @@ router.get("/:friendId/messages", requireAuth, async (req, res) => {
   );
 });
 
+// DELETE /api/friends/:friendId/messages — delete the complete conversation
+router.delete("/:friendId/messages", requireAuth, async (req, res) => {
+  const userId = req.userId!;
+  const friendId = String(req.params.friendId);
+
+  const [friendship] = await db
+    .select()
+    .from(friendshipsTable)
+    .where(
+      or(
+        and(eq(friendshipsTable.user1Id, userId), eq(friendshipsTable.user2Id, friendId)),
+        and(eq(friendshipsTable.user1Id, friendId), eq(friendshipsTable.user2Id, userId)),
+      ),
+    )
+    .limit(1);
+
+  if (!friendship) {
+    res.status(403).json({ error: "Not friends" });
+    return;
+  }
+
+  const deleted = await db
+    .delete(directMessagesTable)
+    .where(eq(directMessagesTable.friendshipId, friendship.id))
+    .returning({ id: directMessagesTable.id });
+
+  res.json({
+    deletedGeneralCount: 0,
+    deletedDmCount: deleted.length,
+    deletedGeneralIds: [],
+    deletedDmFriendIds: [friendId],
+  });
+});
+
 // POST /api/friends/:friendId/seen
 router.post("/:friendId/seen", requireAuth, async (req, res) => {
   const userId = req.userId!;
-  const { friendId } = req.params;
+  const friendId = String(req.params.friendId);
 
   const [friendship] = await db
     .select()

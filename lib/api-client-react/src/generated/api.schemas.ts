@@ -112,6 +112,13 @@ export interface RemoveFriendResult {
   removed: boolean;
 }
 
+export interface DeletedHistoryResult {
+  deletedGeneralCount: number;
+  deletedDmCount: number;
+  deletedGeneralIds: string[];
+  deletedDmFriendIds: string[];
+}
+
 export type GetGeneralMessagesParams = {
 limit?: number;
 /**

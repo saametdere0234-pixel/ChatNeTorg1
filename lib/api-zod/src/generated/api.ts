@@ -144,6 +144,17 @@ export const GetGeneralMessagesResponse = zod.array(GetGeneralMessagesResponseIt
 
 
 /**
+ * @summary Delete the current user's stored general chat history
+ */
+export const DeleteMyGeneralHistoryResponse = zod.object({
+  "deletedGeneralCount": zod.number(),
+  "deletedDmCount": zod.number(),
+  "deletedGeneralIds": zod.array(zod.string()),
+  "deletedDmFriendIds": zod.array(zod.string())
+})
+
+
+/**
  * @summary Get friend list
  */
 export const GetFriendsResponseItem = zod.object({
@@ -154,6 +165,17 @@ export const GetFriendsResponseItem = zod.object({
   "unreadCount": zod.number().optional()
 })
 export const GetFriendsResponse = zod.array(GetFriendsResponseItem)
+
+
+/**
+ * @summary Delete all direct messages from the current user's conversations
+ */
+export const DeleteMyDmHistoryResponse = zod.object({
+  "deletedGeneralCount": zod.number(),
+  "deletedDmCount": zod.number(),
+  "deletedGeneralIds": zod.array(zod.string()),
+  "deletedDmFriendIds": zod.array(zod.string())
+})
 
 
 /**
@@ -188,6 +210,21 @@ export const GetFriendMessagesResponseItem = zod.object({
   "seenAt": zod.coerce.date().nullish()
 })
 export const GetFriendMessagesResponse = zod.array(GetFriendMessagesResponseItem)
+
+
+/**
+ * @summary Delete all direct messages in a friend conversation
+ */
+export const DeleteFriendHistoryParams = zod.object({
+  "friendId": zod.coerce.string()
+})
+
+export const DeleteFriendHistoryResponse = zod.object({
+  "deletedGeneralCount": zod.number(),
+  "deletedDmCount": zod.number(),
+  "deletedGeneralIds": zod.array(zod.string()),
+  "deletedDmFriendIds": zod.array(zod.string())
+})
 
 
 /**
