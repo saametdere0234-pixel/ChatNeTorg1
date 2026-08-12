@@ -88,7 +88,7 @@ export const useSocketStore = create<SocketStore>((set, get) => ({
   connect: (token: string) => {
     if (get().socket) return;
 
-    const socket = io({
+    const socket = io(import.meta.env.VITE_API_URL || undefined, {
       path: '/api/socket.io',
       auth: { token },
       reconnectionDelay: 500,

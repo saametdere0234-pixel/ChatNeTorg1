@@ -1,0 +1,11 @@
+.git
+.local
+.cache
+node_modules
+**/node_modules
+**/dist
+**/.vite
+*.tsbuildinfo
+*.zip
+attached_assets
+artifacts/mockup-sandbox
