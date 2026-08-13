@@ -2,7 +2,7 @@
   "version": 2,
   "framework": "vite",
   "installCommand": "pnpm install --frozen-lockfile",
-  "buildCommand": "pnpm --filter @workspace/chatnet run build",
+  "buildCommand": "pnpm --filter @workspace/chatnet exec vite build --config vite.config.ts",
   "outputDirectory": "artifacts/chatnet/dist/public",
   "rewrites": [
     {

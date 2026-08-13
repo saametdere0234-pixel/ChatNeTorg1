@@ -6,7 +6,7 @@ ChatNet's Vite frontend can be published on Vercel from the repository root.
 
 - Framework preset: **Vite**
 - Root directory: repository root
-- Build command: `pnpm --filter @workspace/chatnet run build`
+- Build command: `pnpm --filter @workspace/chatnet exec vite build --config vite.config.ts`
 - Output directory: `artifacts/chatnet/dist/public`
 - Install command: `pnpm install --frozen-lockfile`
 
