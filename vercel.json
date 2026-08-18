@@ -1,3 +1,5 @@
 {
-  "outputDirectory": "artifacts/chatnet/dist/public"
+  "outputDirectory": "artifacts/chatnet/dist/public",
+  "cleanUrls": true,
+  "framework": "vite"
 }
